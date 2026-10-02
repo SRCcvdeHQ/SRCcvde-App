@@ -875,6 +875,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      begin_google_drive_oauth: {
+        Args: never
+        Returns: {
+          client_id: string
+          redirect_uri: string
+          scope: string
+          state: string
+        }[]
+      }
       configure_google_drive_oauth: {
         Args: { p_client_id: string; p_client_secret: string }
         Returns: undefined
