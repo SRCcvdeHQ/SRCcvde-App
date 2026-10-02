@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_integrations: {
+        Row: {
+          connected_at: string | null
+          connected_by: string | null
+          display_name: string | null
+          last_error: string | null
+          provider: string
+          root_folder_id: string | null
+          root_folder_name: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          connected_at?: string | null
+          connected_by?: string | null
+          display_name?: string | null
+          last_error?: string | null
+          provider: string
+          root_folder_id?: string | null
+          root_folder_name?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          connected_at?: string | null
+          connected_by?: string | null
+          display_name?: string | null
+          last_error?: string | null
+          provider?: string
+          root_folder_id?: string | null
+          root_folder_name?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       app_memberships: {
         Row: {
           created_at: string
@@ -471,6 +507,33 @@ export type Database = {
           },
         ]
       }
+      oauth_connection_states: {
+        Row: {
+          created_at: string
+          expires_at: string
+          provider: string
+          state: string
+          used_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          provider: string
+          state: string
+          used_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          provider?: string
+          state?: string
+          used_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -812,6 +875,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      configure_google_drive_oauth: {
+        Args: { p_client_id: string; p_client_secret: string }
+        Returns: undefined
+      }
       convert_lead_to_client: {
         Args: { p_inquiry_id: string }
         Returns: string
@@ -831,6 +898,14 @@ export type Database = {
         }
         Returns: string
       }
+      google_drive_oauth_credentials: {
+        Args: never
+        Returns: {
+          client_id: string
+          client_secret: string
+          refresh_token: string
+        }[]
+      }
       mark_signature_viewed: {
         Args: { p_request_id: string }
         Returns: undefined
@@ -842,6 +917,10 @@ export type Database = {
           p_request_id: string
           p_signature_value: string
         }
+        Returns: undefined
+      }
+      store_google_drive_refresh_token: {
+        Args: { p_refresh_token: string }
         Returns: undefined
       }
     }
