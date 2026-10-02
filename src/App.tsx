@@ -182,13 +182,28 @@ function AdminRouter({route,profile,navigate}:{route:string;profile:Profile|null
 }
 
 export default function App(){
- const[session,setSession]=useState<Session|null>(null),[loading,setLoading]=useState(true),[membership,setMembership]=useState<Membership|null>(null),[profile,setProfile]=useState<Profile|null>(null),[route,setRoute]=useState(path())
+ const initialAuthType=useMemo(()=>new URLSearchParams(location.hash.replace(/^#/,'')).get('type'),[])
+ const[session,setSession]=useState<Session|null>(null),[loading,setLoading]=useState(true),[membership,setMembership]=useState<Membership|null>(null),[profile,setProfile]=useState<Profile|null>(null),[route,setRoute]=useState(path()),[passwordFlow,setPasswordFlow]=useState(initialAuthType==='recovery'||initialAuthType==='invite')
  useEffect(()=>{const pop=()=>setRoute(path());addEventListener('popstate',pop);return()=>removeEventListener('popstate',pop)},[])
- useEffect(()=>{supabase.auth.getSession().then(({data})=>{setSession(data.session);setLoading(false)});const{data:{subscription}}=supabase.auth.onAuthStateChange((_e,s)=>{setSession(s);if(!s){setMembership(null);setProfile(null)}});return()=>subscription.unsubscribe()},[])
+ useEffect(()=>{
+  const hash=new URLSearchParams(location.hash.replace(/^#/,''))
+  const accessToken=hash.get('access_token'),refreshToken=hash.get('refresh_token'),authType=hash.get('type')
+  const boot=async()=>{
+   if(route==='/set-password'&&(authType==='recovery'||authType==='invite')&&accessToken&&refreshToken){
+    const{data,error}=await supabase.auth.setSession({access_token:accessToken,refresh_token:refreshToken})
+    if(!error){setPasswordFlow(true);setSession(data.session);setLoading(false);return}
+   }
+   const{data}=await supabase.auth.getSession();setSession(data.session);setLoading(false)
+  }
+  boot()
+  const{data:{subscription}}=supabase.auth.onAuthStateChange((event,s)=>{if(event==='PASSWORD_RECOVERY')setPasswordFlow(true);setSession(s);if(!s){setMembership(null);setProfile(null)}})
+  return()=>subscription.unsubscribe()
+ },[])
  useEffect(()=>{if(!session)return;Promise.all([supabase.from('app_memberships').select('role,status').eq('user_id',session.user.id).maybeSingle(),supabase.from('profiles').select('full_name,email').eq('id',session.user.id).maybeSingle()]).then(([m,p])=>{setMembership(m.data as Membership|null);setProfile(p.data as Profile|null)})},[session])
  const active=useMemo(()=>membership?.status==='active'?membership:null,[membership])
  const navigate=(p:string)=>{history.pushState({},'',p);setRoute(p)}
  if(loading)return <main className="loading"><Brand/><span>Opening workspace…</span></main>
+ if(route==='/set-password'&&!passwordFlow)return <main className="pending"><Brand/><p className="eyebrow">Secure password setup</p><h1>This password link isn't active.</h1><p>For your protection, a password can only be changed from the recovery or invitation link sent to that account.</p><button className="primary" onClick={async()=>{await supabase.auth.signOut();history.replaceState({},'','/');location.reload()}}>Return to sign in</button></main>
  if(!session)return <Login/>
  if(route==='/set-password')return <SetPassword/>
  if(!active)return <PendingAccess email={session.user.email}/>
