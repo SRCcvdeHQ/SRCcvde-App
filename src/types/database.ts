@@ -97,6 +97,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           drive_file_id: string | null
+          executed_artifact_id: string | null
           fully_executed_at: string | null
           id: string
           name: string
@@ -113,6 +114,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           drive_file_id?: string | null
+          executed_artifact_id?: string | null
           fully_executed_at?: string | null
           id?: string
           name: string
@@ -129,6 +131,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           drive_file_id?: string | null
+          executed_artifact_id?: string | null
           fully_executed_at?: string | null
           id?: string
           name?: string
@@ -144,6 +147,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_documents_executed_artifact_id_fkey"
+            columns: ["executed_artifact_id"]
+            isOneToOne: false
+            referencedRelation: "executed_document_artifacts"
             referencedColumns: ["id"]
           },
           {
@@ -307,6 +317,95 @@ export type Database = {
             columns: ["document_id"]
             isOneToOne: false
             referencedRelation: "client_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      executed_document_artifacts: {
+        Row: {
+          byte_size: number
+          client_id: string
+          document_id: string
+          document_version_id: string
+          drive_error: string | null
+          drive_file_id: string | null
+          drive_folder_id: string | null
+          drive_sync_status: string
+          drive_synced_at: string | null
+          final_sha256: string
+          generated_at: string
+          generated_by: string | null
+          id: string
+          metadata: Json
+          project_id: string | null
+          storage_bucket: string
+          storage_path: string
+        }
+        Insert: {
+          byte_size: number
+          client_id: string
+          document_id: string
+          document_version_id: string
+          drive_error?: string | null
+          drive_file_id?: string | null
+          drive_folder_id?: string | null
+          drive_sync_status?: string
+          drive_synced_at?: string | null
+          final_sha256: string
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          metadata?: Json
+          project_id?: string | null
+          storage_bucket?: string
+          storage_path: string
+        }
+        Update: {
+          byte_size?: number
+          client_id?: string
+          document_id?: string
+          document_version_id?: string
+          drive_error?: string | null
+          drive_file_id?: string | null
+          drive_folder_id?: string | null
+          drive_sync_status?: string
+          drive_synced_at?: string | null
+          final_sha256?: string
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          metadata?: Json
+          project_id?: string | null
+          storage_bucket?: string
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "executed_document_artifacts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "executed_document_artifacts_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: true
+            referencedRelation: "client_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "executed_document_artifacts_document_version_id_fkey"
+            columns: ["document_version_id"]
+            isOneToOne: false
+            referencedRelation: "document_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "executed_document_artifacts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
