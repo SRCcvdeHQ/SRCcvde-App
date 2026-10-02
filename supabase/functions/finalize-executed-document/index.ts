@@ -146,7 +146,9 @@ Deno.serve(async(req:Request)=>{
   }
   const {data:fresh}=await admin.from("executed_document_artifacts").select("*").eq("id",existing.id).single();
   const {data:url}=await admin.storage.from(existing.storage_bucket).createSignedUrl(existing.storage_path,300,{download:safeName(doc.name)+" - EXECUTED.pdf"});
-  return json({ok:true,artifact:fresh||existing,drive,download_url:url?.signedUrl},200,origin)
+  const originalStoredPath=(fresh||existing).original_storage_path;
+  const {data:originalUrl}=originalStoredPath?await admin.storage.from(existing.storage_bucket).createSignedUrl(originalStoredPath,300,{download:safeName(doc.name)+" - ORIGINAL.pdf"}):{data:null};
+  return json({ok:true,artifact:fresh||existing,drive,download_url:url?.signedUrl,original_download_url:originalUrl?.signedUrl||null},200,origin)
  }
 
  const [{data:version},{data:client},{data:project},{data:requests}]=await Promise.all([
@@ -168,6 +170,9 @@ Deno.serve(async(req:Request)=>{
  await admin.from("client_documents").update({executed_artifact_id:artifact.id}).eq("id",doc.id);
  const drive=await syncDrive(admin,artifact,client,doc,bytes,originalBytes);
  if(drive.status==="not_configured")await admin.from("executed_document_artifacts").update({drive_sync_status:"not_configured"}).eq("id",artifact.id);
- const {data:url}=await admin.storage.from("executed-documents").createSignedUrl(path,300,{download:safeName(doc.name)+" - EXECUTED.pdf"});
- return json({ok:true,artifact:{...artifact,drive_sync_status:drive.status},drive,download_url:url?.signedUrl},200,origin);
+ const [{data:url},{data:originalUrl}]=await Promise.all([
+  admin.storage.from("executed-documents").createSignedUrl(path,300,{download:safeName(doc.name)+" - EXECUTED.pdf"}),
+  admin.storage.from("executed-documents").createSignedUrl(originalPath,300,{download:safeName(doc.name)+" - ORIGINAL.pdf"})
+ ]);
+ return json({ok:true,artifact:{...artifact,drive_sync_status:drive.status},drive,download_url:url?.signedUrl,original_download_url:originalUrl?.signedUrl||null},200,origin);
 });
