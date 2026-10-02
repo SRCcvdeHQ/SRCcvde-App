@@ -9,3 +9,6 @@
 
 /* Executed document vault */
 .success-message a{color:var(--cream);text-decoration:underline;text-underline-offset:3px}.vault-row{gap:16px}.vault-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap}.sync-state{font-size:9px;letter-spacing:.08em;text-transform:uppercase;border:1px solid var(--line);border-radius:999px;padding:6px 9px;color:var(--muted)}.sync-state.synced{color:#a7d5b6;border-color:rgba(122,190,145,.25)}.sync-state.failed{color:#e4b3a9;border-color:rgba(220,130,110,.25)}@media(max-width:650px){.vault-row{align-items:flex-start}.vault-actions{width:100%;justify-content:flex-start}.vault-actions .ghost{width:100%}}
+
+/* Google Drive OAuth connection */
+.drive-connect{margin-bottom:16px}.google-credential-form{max-width:680px;margin-top:18px}.connected-drive{display:flex;align-items:center;justify-content:space-between;gap:18px;padding-top:8px}.connected-drive b,.connected-drive small{display:block}.connected-drive small{color:var(--muted);margin-top:5px}.drive-connect .section-head{margin-bottom:10px}@media(max-width:600px){.connected-drive{align-items:flex-start;flex-direction:column}.connected-drive .ghost{width:100%}}
