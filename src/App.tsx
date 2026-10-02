@@ -41,10 +41,10 @@ function SetPassword(){
  return <main className="auth-page"><section className="auth-copy"><Brand/><p className="eyebrow">SRCcvde Workspace</p><h1>Make this workspace yours.</h1><p>Create the password you'll use whenever you return to app.srccvde.com.</p></section><section className="auth-panel"><form onSubmit={submit}><p className="eyebrow">Account setup</p><h2>Set your password.</h2><label>New password<input type="password" autoComplete="new-password" value={password} onChange={e=>setPassword(e.target.value)} required minLength={8}/></label><label>Confirm password<input type="password" autoComplete="new-password" value={confirm} onChange={e=>setConfirm(e.target.value)} required minLength={8}/></label><button className="primary" disabled={busy}>{busy?'Saving…':'Save password & continue'}</button>{message&&<p className="form-message">{message}</p>}</form></section></main>
 }
 
-function Sidebar({role,current,navigate,onSignOut}:{role:Role;current:string;navigate:(p:string)=>void;onSignOut:()=>void}){
+function Sidebar({role,current,navigate,onSignOut,mobileOpen=false,onNavigate}:{role:Role;current:string;navigate:(p:string)=>void;onSignOut:()=>void;mobileOpen?:boolean;onNavigate?:()=>void}){
  const admin=role!=='client'
  const items=admin?[['Overview','/'],['Leads','/leads'],['Clients','/clients'],['Projects','/projects'],['Documents','/documents'],['Activity','/activity']]:[['Overview','/'],['Project','/project'],['Documents','/documents'],['Activity','/activity']]
- return <aside className="sidebar"><Brand/><nav>{items.map(([name,p])=><button className={(p==='/'?current==='/':current.startsWith(p))?'active':''} onClick={()=>navigate(p)} key={p}><span>{name[0]}</span>{name}</button>)}</nav><div className="sidebar-bottom"><small>{admin?'SRCcvde team':'Client workspace'}</small><button onClick={onSignOut}>Sign out</button></div></aside>
+ return <aside className={'sidebar'+(mobileOpen?' mobile-open':'')}><Brand/><nav>{items.map(([name,p])=><button className={(p==='/'?current==='/':current.startsWith(p))?'active':''} onClick={()=>{navigate(p);onNavigate?.()}} key={p}><span>{name[0]}</span>{name}</button>)}</nav><div className="sidebar-bottom"><small>{admin?'SRCcvde team':'Client workspace'}</small><button onClick={onSignOut}>Sign out</button></div></aside>
 }
 
 function AdminOverview({profile,navigate}:{profile:Profile|null;navigate:(p:string)=>void}){
@@ -186,8 +186,8 @@ export default function App(){
  const initialHash=useMemo(()=>new URLSearchParams(location.hash.replace(/^#/,'')),[])
  const initialAuthType=initialHash.get('type')
  const initialCode=useMemo(()=>new URLSearchParams(location.search).get('code'),[])
- const[session,setSession]=useState<Session|null>(null),[loading,setLoading]=useState(true),[membership,setMembership]=useState<Membership|null>(null),[profile,setProfile]=useState<Profile|null>(null),[route,setRoute]=useState(path()),[passwordFlow,setPasswordFlow]=useState(false),[authLinkError,setAuthLinkError]=useState('')
- useEffect(()=>{const pop=()=>setRoute(path());addEventListener('popstate',pop);return()=>removeEventListener('popstate',pop)},[])
+ const[session,setSession]=useState<Session|null>(null),[loading,setLoading]=useState(true),[membership,setMembership]=useState<Membership|null>(null),[profile,setProfile]=useState<Profile|null>(null),[route,setRoute]=useState(path()),[passwordFlow,setPasswordFlow]=useState(false),[authLinkError,setAuthLinkError]=useState(''),[mobileNav,setMobileNav]=useState(false)
+ useEffect(()=>{const pop=()=>{setRoute(path());setMobileNav(false)};addEventListener('popstate',pop);return()=>removeEventListener('popstate',pop)},[])
  useEffect(()=>{
   let alive=true
   const boot=async()=>{
@@ -221,5 +221,5 @@ export default function App(){
  if(!session)return <Login/>
  if(route==='/set-password')return <SetPassword/>
  if(!active)return <PendingAccess email={session.user.email}/>
- return <div className="app-shell"><Sidebar role={active.role} current={route} navigate={navigate} onSignOut={()=>supabase.auth.signOut()}/><main className="workspace">{active.role==='client'?<ClientRouter route={route} profile={profile} navigate={navigate}/>:<AdminRouter route={route} profile={profile} navigate={navigate}/>}</main></div>
+ return <div className="app-shell"><header className="mobile-bar"><Brand/><button className="mobile-menu-button" aria-label="Open navigation" aria-expanded={mobileNav} onClick={()=>setMobileNav(v=>!v)}>Menu</button></header>{mobileNav&&<button className="mobile-scrim" aria-label="Close navigation" onClick={()=>setMobileNav(false)}/>}<Sidebar role={active.role} current={route} navigate={navigate} mobileOpen={mobileNav} onNavigate={()=>setMobileNav(false)} onSignOut={()=>supabase.auth.signOut()}/><main className="workspace">{active.role==='client'?<ClientRouter route={route} profile={profile} navigate={navigate}/>:<AdminRouter route={route} profile={profile} navigate={navigate}/>}</main></div>
 }
