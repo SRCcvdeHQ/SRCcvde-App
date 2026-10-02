@@ -31,8 +31,14 @@ function StatusPill({value}:{value:string}){return <span className={'pill '+valu
 function Login(){
  const[email,setEmail]=useState(''),[password,setPassword]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState('')
  async function submit(e:FormEvent){e.preventDefault();setBusy(true);setMessage('');const{error}=await supabase.auth.signInWithPassword({email,password});setBusy(false);if(error)setMessage(error.message)}
- async function reset(){if(!email){setMessage('Enter your email first.');return}setBusy(true);const{error}=await supabase.auth.resetPasswordForEmail(email,{redirectTo:'https://app.srccvde.com/'});setBusy(false);setMessage(error?error.message:'Password reset email sent.')}
+ async function reset(){if(!email){setMessage('Enter your email first.');return}setBusy(true);const{error}=await supabase.auth.resetPasswordForEmail(email,{redirectTo:'https://app.srccvde.com/set-password'});setBusy(false);setMessage(error?error.message:'Password reset email sent.')}
  return <main className="auth-page"><section className="auth-copy"><Brand/><p className="eyebrow">SRCcvde Workspace</p><h1>Your project has a home.</h1><p>One secure place for progress, documents, approvals, change requests and everything we build together.</p><div className="stage-preview">{stages.map((s,i)=><div key={s}><b>{String(i+1).padStart(2,'0')}</b><span>{s}</span></div>)}</div></section><section className="auth-panel"><form onSubmit={submit}><p className="eyebrow">Private access</p><h2>Welcome back.</h2><label>Email<input type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} required/></label><label>Password<input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required/></label><button className="primary" disabled={busy}>{busy?'Signing in…':'Sign in'}</button><button className="text-button" type="button" onClick={reset} disabled={busy}>Forgot password?</button>{message&&<p className="form-message">{message}</p>}<p className="fine">Accounts are created by SRCcvde. Project applicants receive access when their workspace is ready.</p></form></section></main>
+}
+
+function SetPassword(){
+ const[password,setPassword]=useState(''),[confirm,setConfirm]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState('')
+ async function submit(e:FormEvent){e.preventDefault();if(password.length<8){setMessage('Use at least 8 characters.');return}if(password!==confirm){setMessage('Passwords do not match.');return}setBusy(true);const{error}=await supabase.auth.updateUser({password});setBusy(false);if(error){setMessage(error.message);return}history.replaceState({},'', '/');location.reload()}
+ return <main className="auth-page"><section className="auth-copy"><Brand/><p className="eyebrow">SRCcvde Workspace</p><h1>Make this workspace yours.</h1><p>Create the password you'll use whenever you return to app.srccvde.com.</p></section><section className="auth-panel"><form onSubmit={submit}><p className="eyebrow">Account setup</p><h2>Set your password.</h2><label>New password<input type="password" autoComplete="new-password" value={password} onChange={e=>setPassword(e.target.value)} required minLength={8}/></label><label>Confirm password<input type="password" autoComplete="new-password" value={confirm} onChange={e=>setConfirm(e.target.value)} required minLength={8}/></label><button className="primary" disabled={busy}>{busy?'Saving…':'Save password & continue'}</button>{message&&<p className="form-message">{message}</p>}</form></section></main>
 }
 
 function Sidebar({role,current,navigate,onSignOut}:{role:Role;current:string;navigate:(p:string)=>void;onSignOut:()=>void}){
@@ -184,6 +190,7 @@ export default function App(){
  const navigate=(p:string)=>{history.pushState({},'',p);setRoute(p)}
  if(loading)return <main className="loading"><Brand/><span>Opening workspace…</span></main>
  if(!session)return <Login/>
+ if(route==='/set-password')return <SetPassword/>
  if(!active)return <PendingAccess email={session.user.email}/>
  return <div className="app-shell"><Sidebar role={active.role} current={route} navigate={navigate} onSignOut={()=>supabase.auth.signOut()}/><main className="workspace">{active.role==='client'?<ClientRouter route={route} profile={profile} navigate={navigate}/>:<AdminRouter route={route} profile={profile} navigate={navigate}/>}</main></div>
 }
