@@ -182,28 +182,41 @@ function AdminRouter({route,profile,navigate}:{route:string;profile:Profile|null
 }
 
 export default function App(){
- const initialAuthType=useMemo(()=>new URLSearchParams(location.hash.replace(/^#/,'')).get('type'),[])
- const[session,setSession]=useState<Session|null>(null),[loading,setLoading]=useState(true),[membership,setMembership]=useState<Membership|null>(null),[profile,setProfile]=useState<Profile|null>(null),[route,setRoute]=useState(path()),[passwordFlow,setPasswordFlow]=useState(initialAuthType==='recovery'||initialAuthType==='invite')
+ const initialHash=useMemo(()=>new URLSearchParams(location.hash.replace(/^#/,'')),[])
+ const initialAuthType=initialHash.get('type')
+ const initialCode=useMemo(()=>new URLSearchParams(location.search).get('code'),[])
+ const[session,setSession]=useState<Session|null>(null),[loading,setLoading]=useState(true),[membership,setMembership]=useState<Membership|null>(null),[profile,setProfile]=useState<Profile|null>(null),[route,setRoute]=useState(path()),[passwordFlow,setPasswordFlow]=useState(false),[authLinkError,setAuthLinkError]=useState('')
  useEffect(()=>{const pop=()=>setRoute(path());addEventListener('popstate',pop);return()=>removeEventListener('popstate',pop)},[])
  useEffect(()=>{
-  const hash=new URLSearchParams(location.hash.replace(/^#/,''))
-  const accessToken=hash.get('access_token'),refreshToken=hash.get('refresh_token'),authType=hash.get('type')
+  let alive=true
   const boot=async()=>{
-   if(route==='/set-password'&&(authType==='recovery'||authType==='invite')&&accessToken&&refreshToken){
-    const{data,error}=await supabase.auth.setSession({access_token:accessToken,refresh_token:refreshToken})
-    if(!error){setPasswordFlow(true);setSession(data.session);setLoading(false);return}
+   if(route==='/set-password'){
+    const accessToken=initialHash.get('access_token'),refreshToken=initialHash.get('refresh_token')
+    if((initialAuthType==='recovery'||initialAuthType==='invite')&&accessToken&&refreshToken){
+     const{data,error}=await supabase.auth.setSession({access_token:accessToken,refresh_token:refreshToken})
+     if(!alive)return
+     if(error){setAuthLinkError(error.message);setLoading(false);return}
+     setPasswordFlow(true);setSession(data.session);setLoading(false);return
+    }
+    if(initialCode){
+     const{data,error}=await supabase.auth.exchangeCodeForSession(initialCode)
+     if(!alive)return
+     if(error){setAuthLinkError(error.message);setLoading(false);return}
+     setPasswordFlow(true);setSession(data.session);setLoading(false);return
+    }
    }
-   const{data}=await supabase.auth.getSession();setSession(data.session);setLoading(false)
+   const{data}=await supabase.auth.getSession()
+   if(alive){setSession(data.session);setLoading(false)}
   }
   boot()
   const{data:{subscription}}=supabase.auth.onAuthStateChange((event,s)=>{if(event==='PASSWORD_RECOVERY')setPasswordFlow(true);setSession(s);if(!s){setMembership(null);setProfile(null)}})
-  return()=>subscription.unsubscribe()
+  return()=>{alive=false;subscription.unsubscribe()}
  },[])
  useEffect(()=>{if(!session)return;Promise.all([supabase.from('app_memberships').select('role,status').eq('user_id',session.user.id).maybeSingle(),supabase.from('profiles').select('full_name,email').eq('id',session.user.id).maybeSingle()]).then(([m,p])=>{setMembership(m.data as Membership|null);setProfile(p.data as Profile|null)})},[session])
  const active=useMemo(()=>membership?.status==='active'?membership:null,[membership])
  const navigate=(p:string)=>{history.pushState({},'',p);setRoute(p)}
  if(loading)return <main className="loading"><Brand/><span>Opening workspace…</span></main>
- if(route==='/set-password'&&!passwordFlow)return <main className="pending"><Brand/><p className="eyebrow">Secure password setup</p><h1>This password link isn't active.</h1><p>For your protection, a password can only be changed from the recovery or invitation link sent to that account.</p><button className="primary" onClick={async()=>{await supabase.auth.signOut();history.replaceState({},'','/');location.reload()}}>Return to sign in</button></main>
+ if(route==='/set-password'&&(!passwordFlow||!session))return <main className="pending"><Brand/><p className="eyebrow">Secure password setup</p><h1>{authLinkError?'This password link could not be opened.':"This password link isn't active."}</h1><p>{authLinkError?'The link may have expired or already been used. Request a fresh password email and try again.':'For your protection, a password can only be changed from the recovery or invitation link sent to that account.'}</p><button className="primary" onClick={async()=>{await supabase.auth.signOut();history.replaceState({},'','/');location.reload()}}>Return to sign in</button></main>
  if(!session)return <Login/>
  if(route==='/set-password')return <SetPassword/>
  if(!active)return <PendingAccess email={session.user.email}/>
