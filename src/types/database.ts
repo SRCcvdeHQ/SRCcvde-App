@@ -22,7 +22,7 @@ export type Database = {
       }
     }
     Views: { [_ in never]: never }
-    Functions: { is_src_staff: { Args: never; Returns:boolean } }
+    Functions: { [_ in never]: never }
     Enums: { app_role:'owner'|'admin'|'staff'|'client'; membership_status:'invited'|'active'|'suspended' }
     CompositeTypes: { [_ in never]: never }
   }
