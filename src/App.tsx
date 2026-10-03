@@ -323,7 +323,7 @@ export default function App(){
  },[])
  useEffect(()=>{if(!session)return;Promise.all([supabase.from('app_memberships').select('role,status').eq('user_id',session.user.id).maybeSingle(),supabase.from('profiles').select('full_name,email').eq('id',session.user.id).maybeSingle()]).then(([m,p])=>{setMembership(m.data as Membership|null);setProfile(p.data as Profile|null)})},[session])
  const active=useMemo(()=>membership?.status==='active'?membership:null,[membership])
- const navigate=(p:string)=>{history.pushState({},'',p);setRoute(p)}
+ const navigate=(p:string)=>{history.pushState({},'',p);setRoute(path())}
  if(loading)return <main className="loading"><Brand/><span>Opening workspace…</span></main>
  if(route==='/set-password'&&(!passwordFlow||!session))return <main className="pending"><Brand/><p className="eyebrow">Secure password setup</p><h1>{authLinkError?'This password link could not be opened.':"This password link isn't active."}</h1><p>{authLinkError?'The link may have expired or already been used. Request a fresh password email and try again.':'For your protection, a password can only be changed from the recovery or invitation link sent to that account.'}</p><button className="primary" onClick={async()=>{await supabase.auth.signOut();history.replaceState({},'','/');location.reload()}}>Return to sign in</button></main>
  if(!session)return <Login/>
