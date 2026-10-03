@@ -225,3 +225,14 @@ button{touch-action:manipulation}
 
 .project-now-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.project-now-grid .panel{min-height:170px;display:flex;flex-direction:column;align-items:flex-start}.project-now-grid h2{margin:4px 0 8px}.project-now-grid .muted{margin:0;line-height:1.55}.project-due{margin-top:auto;padding-top:16px;color:var(--muted)}
 @media(max-width:700px){.project-now-grid{grid-template-columns:1fr}.project-now-grid .panel{min-height:0}}
+
+/* Normalize native dropdown alignment across the app */
+select{
+  box-sizing:border-box;
+  height:50px;
+  min-height:50px;
+  padding:0 42px 0 14px;
+  line-height:normal;
+  vertical-align:middle;
+}
+label>select{display:block;margin-top:8px}
