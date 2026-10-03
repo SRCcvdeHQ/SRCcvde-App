@@ -197,3 +197,6 @@ button{touch-action:manipulation}
 .danger-action{opacity:.72}.danger-action:hover{opacity:1}
 @media(max-width:900px){.milestone-create{grid-template-columns:1fr 1fr}.milestone-create>div{grid-column:1/-1}}
 @media(max-width:560px){.milestone-create{grid-template-columns:1fr}.milestone-create>div{grid-column:auto}}
+
+.milestone-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px}.compact-action{min-width:36px;padding:8px 10px}.compact-action:disabled{opacity:.25;cursor:not-allowed}
+@media(max-width:900px){.milestone-actions{justify-content:flex-start}}
