@@ -41,7 +41,7 @@ function SetPassword(){
  return <main className="auth-page"><section className="auth-copy"><Brand/><p className="eyebrow">SRCcvde Workspace</p><h1>Make this workspace yours.</h1><p>Create the password you'll use whenever you return to app.srccvde.com.</p></section><section className="auth-panel"><form onSubmit={submit}><p className="eyebrow">Account setup</p><h2>Set your password.</h2><label>New password<input type="password" autoComplete="new-password" value={password} onChange={e=>setPassword(e.target.value)} required minLength={8}/></label><label>Confirm password<input type="password" autoComplete="new-password" value={confirm} onChange={e=>setConfirm(e.target.value)} required minLength={8}/></label><button className="primary" disabled={busy}>{busy?'Saving…':'Save password & continue'}</button>{message&&<p className="form-message">{message}</p>}</form></section></main>
 }
 
-const PUSH_PUBLIC_KEY='BNh6Lz4dFeJodDYWO11k_C_awPWs5RNlldTIz4tbbV2W1i6PJansFzEQF2MZyGw-eaGpxayjsfjReWCqhov1qAM'
+const PUSH_PUBLIC_KEY='BL69KF1eYFXO1LSqLxw0Hp2gYCeJvobxGFN4cXC_h-Nx8hrnxTIadP6WUWfQVEPjmEgf1C-hEmFCCtJcNJHZugI'
 function pushKeyBytes(value:string){const padding='='.repeat((4-value.length%4)%4);const raw=atob((value+padding).replace(/-/g,'+').replace(/_/g,'/'));return Uint8Array.from([...raw].map(char=>char.charCodeAt(0)))}
 
 function NotificationsPage(){
