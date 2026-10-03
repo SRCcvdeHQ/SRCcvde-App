@@ -121,3 +121,9 @@ button{touch-action:manipulation}
 .review-v2-action{margin-top:20px;padding:clamp(24px,3vw,34px);border-color:rgba(116,139,122,.2);background:linear-gradient(145deg,rgba(15,25,19,.92),rgba(10,18,14,.92));box-shadow:0 18px 50px rgba(0,0,0,.12)}.review-v2-action h2{font-size:clamp(25px,3vw,34px);letter-spacing:-.035em}.review-v2-consent{font-size:14px;line-height:1.7}.review-v2-form label:not(.check-row){font-size:12px}.review-v2-form input{min-height:50px}.review-v2-form .primary{min-height:50px;font-weight:700}.review-v2-action>.fine{padding-top:18px;border-top:1px solid rgba(255,255,255,.07)}
 @media(max-width:800px){.review-v2{padding-bottom:24px}.review-v2-top{margin-bottom:24px}.review-v2-title{margin-bottom:22px}.review-v2-document>footer{grid-template-columns:1fr;gap:12px}.review-v2-document>footer code{text-align:left}.review-v2-action{gap:24px}}
 @media(max-width:520px){.review-v2-title h1{font-size:36px}.review-v2-title>p:last-child{font-size:14px}.review-v2-document{padding:24px 19px}.review-v2-document>header{margin-bottom:22px}.review-v2-document>header>span{padding:7px 9px}.review-v2-text{padding:24px 0 4px;line-height:1.7}.review-v2-document>footer{margin-top:26px}.review-v2-action{margin-top:14px;padding:23px 19px}.review-v2-action h2{font-size:28px}.review-v2-form{gap:14px}}
+
+/* Secure review hotfix: Brand() renders an inline element; keep header children intrinsic. */
+.review-v2-document>header>div:first-child{display:flex!important;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:8px;width:auto!important;height:auto!important;min-height:0!important;align-self:flex-start}
+.review-v2-document>header>div:first-child>.brand{display:inline-block!important;width:max-content!important;height:auto!important;min-height:0!important}
+.review-v2-document>header>div:first-child>small{display:block;width:max-content;max-width:100%}
+.review-v2-document>header>span{align-self:flex-start;flex:0 0 auto}
