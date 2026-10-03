@@ -62,7 +62,7 @@ function NotificationsPage(){
 
 function Sidebar({role,current,navigate,onSignOut,mobileOpen=false,onNavigate}:{role:Role;current:string;navigate:(p:string)=>void;onSignOut:()=>void;mobileOpen?:boolean;onNavigate?:()=>void}){
  const admin=role!=='client'
- const items=admin?[['Overview','/'],['Leads','/leads'],['Clients','/clients'],['Projects','/projects'],['Documents','/documents'],['Activity','/activity'],['Notifications','/notifications']]:[['Overview','/'],['Project','/project'],['Documents','/documents'],['Activity','/activity'],['Notifications','/notifications']]
+ const items=admin?[['Overview','/'],['Leads','/leads'],['Clients','/clients'],['Projects','/projects'],['Documents','/documents'],['Activity','/activity'],['Notifications','/notifications']]:[['Overview','/'],['Project','/project'],['Actions','/actions'],['Documents','/documents'],['Activity','/activity'],['Notifications','/notifications']]
  return <aside className={'sidebar'+(mobileOpen?' mobile-open':'')}><Brand/><nav>{items.map(([name,p])=><button className={(p==='/'?current==='/':current.startsWith(p))?'active':''} onClick={()=>{navigate(p);onNavigate?.()}} key={p}><span>{name[0]}</span>{name}</button>)}</nav><div className="sidebar-bottom"><small>{admin?'SRCcvde team':'Client workspace'}</small><button onClick={onSignOut}>Sign out</button></div></aside>
 }
 
