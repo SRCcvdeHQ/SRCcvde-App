@@ -204,3 +204,6 @@ button{touch-action:manipulation}
 .communication-row{display:grid;grid-template-columns:minmax(180px,.7fr) minmax(0,1.5fr);gap:18px;padding:14px 0;border-top:1px solid var(--line);align-items:start}
 .communication-row:first-of-type{border-top:0}.communication-row>div{display:flex;flex-direction:column;gap:5px}.communication-row small,.communication-row p{color:var(--muted)}.communication-row p{margin:0;line-height:1.55;white-space:pre-wrap}
 @media(max-width:650px){.communication-row{grid-template-columns:1fr;gap:7px}}
+
+.communication-form{display:grid;gap:12px;margin:14px 0 18px;padding:14px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.018)}
+.communication-form label{display:flex;flex-direction:column;gap:7px;font-size:.75rem;color:var(--muted)}.communication-form textarea{min-height:88px;resize:vertical}
