@@ -209,7 +209,8 @@ function ClientRouter({route,profile,navigate}:{route:string;profile:Profile|nul
 function PendingAccess({email}:{email?:string}){return <main className="pending"><Brand/><p className="eyebrow">Workspace access</p><h1>You're signed in.</h1><p>{email} does not have an active SRCcvde workspace membership yet.</p><button className="primary" onClick={()=>supabase.auth.signOut()}>Sign out</button></main>}
 
 function AdminRouter({route,profile,navigate}:{route:string;profile:Profile|null;navigate:(p:string)=>void}){
- const lead=route.match(/^\/leads\/([0-9a-f-]+)$/i),client=route.match(/^\/clients\/([0-9a-f-]+)$/i)
+ const lead=route.match(/^\/leads\/([0-9a-f-]+)$/i),client=route.match(/^\/clients\/([0-9a-f-]+)$/i),sign=route.match(/^\/documents\/([0-9a-f-]+)$/i)
+ if(sign)return <SignDocumentPage requestId={sign[1]} navigate={navigate}/>
  if(lead)return <LeadDetail id={lead[1]} navigate={navigate}/>
  if(client)return <ClientDetail id={client[1]} navigate={navigate}/>
  if(route==='/leads')return <LeadsPage navigate={navigate}/>
