@@ -135,3 +135,21 @@ button{touch-action:manipulation}
 .review-v2-brand small{display:block!important;position:static!important;width:auto!important;height:auto!important;margin:0!important;padding:0!important}
 .review-v2-status{display:inline-flex!important;position:static!important;align-items:center!important;align-self:flex-start!important;flex:0 0 auto!important;width:auto!important;height:auto!important;min-height:0!important;margin:0!important;padding:8px 10px!important;border-radius:999px!important}
 @media(max-width:800px){.review-v2-dochead{flex-direction:row!important;align-items:flex-start!important}.review-v2-brand{flex-direction:column!important}}
+
+/* Secure review final mobile alignment polish */
+@media(max-width:520px){
+ .review-v2-dochead{align-items:flex-start!important;gap:12px!important;margin-bottom:24px!important}
+ .review-v2-brand{gap:6px!important}
+ .review-v2-status{margin-top:2px!important;padding:7px 9px!important;font-size:8px!important;letter-spacing:.12em!important}
+ .review-v2-version{display:grid!important;grid-template-columns:1fr auto!important;align-items:center!important;gap:12px!important;padding:16px 0!important}
+ .review-v2-version>div{gap:5px!important;min-width:0!important}
+ .review-v2-version>span{justify-self:end!important;align-self:center!important;margin:0!important;padding:7px 9px!important;font-size:9px!important}
+ .review-v2-text{padding:26px 0 6px!important}
+ .review-v2-document>footer{padding-top:20px!important;gap:10px!important}
+}
+@media(max-width:390px){
+ .review-v2-dochead{flex-wrap:wrap!important}
+ .review-v2-status{margin-top:0!important}
+ .review-v2-version{grid-template-columns:1fr!important}
+ .review-v2-version>span{justify-self:start!important}
+}
