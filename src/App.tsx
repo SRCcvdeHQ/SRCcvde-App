@@ -193,9 +193,12 @@ function ClientDashboard({profile,navigate}:{profile:Profile|null;navigate:(p:st
 }
 
 function ClientDocumentsPage({navigate}:{navigate:(p:string)=>void}){
- const[requests,setRequests]=useState<SignatureRequest[]>([])
- useEffect(()=>{supabase.from('signature_requests').select('*').eq('signer_side','client').order('requested_at',{ascending:false}).then(({data})=>setRequests((data||[]) as SignatureRequest[]))},[])
- return <><PageTitle eyebrow="Documents" title="Review & sign" copy="Every action is tied to the exact document version you reviewed."/><section className="panel">{requests.length?requests.map(r=><SignatureCard key={r.id} request={r} navigate={navigate}/>):<Empty>No documents need your attention right now.</Empty>}</section></>
+ const[items,setItems]=useState<any[]>([]),[busy,setBusy]=useState(''),[message,setMessage]=useState('')
+ useEffect(()=>{supabase.rpc('get_client_document_library').then(({data,error})=>{if(error)setMessage(error.message);else setItems((data||[]) as any[])})},[])
+ async function openPdf(documentId:string,variant:'original'|'executed'){setBusy(documentId+variant);setMessage('');const{data,error}=await supabase.functions.invoke('client-document-download',{body:{document_id:documentId,variant}});setBusy('');if(error||!data?.url){setMessage(data?.error||error?.message||'Could not open this PDF.');return}window.open(data.url,'_blank','noopener,noreferrer')}
+ return <><PageTitle eyebrow="Documents" title="Your document vault" copy="Review active requests and access every document SRCcvde has shared with you."/>
+ {message&&<p className="success-message">{message}</p>}
+ <section className="panel">{items.length?items.map(({document:d,request:r,artifact:a})=><div className="doc-row vault-row" key={d.id}><div><b>{d.name}</b><small>{label(d.category)} · {r?label(r.status):label(d.state)}</small></div><div className="vault-actions">{r?.status==='pending'&&<button className="ghost" onClick={()=>navigate('/documents/'+r.id)}>Review</button>}{r&&<button className="ghost" onClick={()=>navigate('/documents/'+r.id)}>View</button>}{a?.original_storage_path&&<button className="ghost" disabled={busy===d.id+'original'} onClick={()=>openPdf(d.id,'original')}>{busy===d.id+'original'?'Opening…':'Original PDF'}</button>}{a?.storage_path&&<button className="ghost" disabled={busy===d.id+'executed'} onClick={()=>openPdf(d.id,'executed')}>{busy===d.id+'executed'?'Opening…':'Executed PDF'}</button>}</div></div>):<Empty>No documents have been shared with you yet.</Empty>}</section></>
 }
 
 function ClientRouter({route,profile,navigate}:{route:string;profile:Profile|null;navigate:(p:string)=>void}){
