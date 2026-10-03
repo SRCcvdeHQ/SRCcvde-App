@@ -236,3 +236,8 @@ select{
   vertical-align:middle;
 }
 label>select{display:block;margin-top:8px}
+
+/* Align labeled controls consistently — labels already use gap for spacing */
+label>select{margin-top:0}
+.directory-tools label{margin:0}
+.directory-tools input,.directory-tools select{height:50px;min-height:50px;margin:0}
