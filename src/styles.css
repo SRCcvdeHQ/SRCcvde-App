@@ -200,3 +200,7 @@ button{touch-action:manipulation}
 
 .milestone-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px}.compact-action{min-width:36px;padding:8px 10px}.compact-action:disabled{opacity:.25;cursor:not-allowed}
 @media(max-width:900px){.milestone-actions{justify-content:flex-start}}
+
+.communication-row{display:grid;grid-template-columns:minmax(180px,.7fr) minmax(0,1.5fr);gap:18px;padding:14px 0;border-top:1px solid var(--line);align-items:start}
+.communication-row:first-of-type{border-top:0}.communication-row>div{display:flex;flex-direction:column;gap:5px}.communication-row small,.communication-row p{color:var(--muted)}.communication-row p{margin:0;line-height:1.55;white-space:pre-wrap}
+@media(max-width:650px){.communication-row{grid-template-columns:1fr;gap:7px}}
