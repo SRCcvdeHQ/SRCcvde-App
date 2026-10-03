@@ -191,3 +191,9 @@ button{touch-action:manipulation}
 .visibility-check input{width:auto}
 @media(max-width:900px){.project-control-grid{grid-template-columns:1fr}.admin-milestone{grid-template-columns:1fr 1fr}.admin-milestone>div{grid-column:1/-1}}
 @media(max-width:560px){.admin-milestone{grid-template-columns:1fr}.admin-milestone>div{grid-column:auto}}
+
+.milestone-create{display:grid;grid-template-columns:minmax(150px,.7fr) 1fr 1.4fr auto;gap:14px;align-items:end;margin-top:18px;padding-top:18px;border-top:1px solid var(--line)}
+.milestone-create h3{margin:3px 0 0}.milestone-create label{display:flex;flex-direction:column;gap:7px;font-size:.75rem;color:var(--muted)}
+.danger-action{opacity:.72}.danger-action:hover{opacity:1}
+@media(max-width:900px){.milestone-create{grid-template-columns:1fr 1fr}.milestone-create>div{grid-column:1/-1}}
+@media(max-width:560px){.milestone-create{grid-template-columns:1fr}.milestone-create>div{grid-column:auto}}
