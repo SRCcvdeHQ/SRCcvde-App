@@ -18,8 +18,8 @@ Deno.serve(async(req)=>{
   const {data:member}=await caller.from("app_memberships").select("role,status").eq("user_id",user.id).maybeSingle();
   if(!member||member.status!=="active") return new Response(JSON.stringify({error:"Forbidden"}),{status:403,headers:cors});
   const isStaff=["owner","admin","staff"].includes(member.role);
-  if(!isStaff&&target!==user.id) return new Response(JSON.stringify({error:"Forbidden"}),{status:403,headers:cors});
   const body=await req.json(), target=body.user_id, category=String(body.category||"project_updates");
+  if(!isStaff&&target!==user.id) return new Response(JSON.stringify({error:"Forbidden"}),{status:403,headers:cors});
   if(!target||!body.title||!body.body||!categories.includes(category)) return new Response(JSON.stringify({error:"Invalid notification request"}),{status:400,headers:cors});
   const admin=createClient(url,service);
   const {data:pref}=await admin.from("notification_preferences").select(category).eq("user_id",target).maybeSingle();
