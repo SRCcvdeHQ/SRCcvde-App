@@ -34,7 +34,7 @@ Deno.serve(async(req)=>{
     sent++;
    }catch(e){
     if(e?.statusCode===404||e?.statusCode===410){await admin.from("push_subscriptions").update({enabled:false,revoked_at:new Date().toISOString()}).eq("id",sub.id);disabled++}
-    else throw e;
+    else { const code=Number(e?.statusCode||0); const message=e instanceof Error?e.message:String(e); console.error("push_delivery_failed",{code,message}); throw new Error(`Push provider rejected delivery${code?` (${code})`:""}: ${message}`); }
    }
   }
   return new Response(JSON.stringify({sent,disabled}),{headers:cors});
