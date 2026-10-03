@@ -173,3 +173,21 @@ button{touch-action:manipulation}
 .client-doc-summary:hover{transform:translateY(-2px);border-color:var(--green)}
 .summary-link{display:inline-block;margin-top:14px;font-size:.82rem;font-weight:650}
 @media(max-width:760px){.workspace-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.client-milestone{grid-template-columns:38px minmax(0,1fr)}.milestone-meta{grid-column:2;align-items:flex-start;flex-direction:row;flex-wrap:wrap}.workspace-stats article{padding:15px}}
+
+/* Project delivery controls */
+.project-row-button{width:100%;text-align:left;background:transparent;color:inherit;border-left:0;border-right:0;border-bottom:0;cursor:pointer}
+.project-row-button:hover{background:rgba(255,255,255,.025)}
+.project-control{margin-bottom:14px}
+.project-control-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:18px}
+.project-control-grid label,.admin-milestone label{display:flex;flex-direction:column;gap:7px;font-size:.75rem;color:var(--muted)}
+.project-control-grid select,.admin-milestone select,.admin-milestone input[type=date]{width:100%}
+.project-control-grid input[type=range]{width:100%;accent-color:var(--green)}
+.admin-milestones{display:grid;margin-top:14px}
+.admin-milestone{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(120px,.55fr) minmax(140px,.6fr) auto;gap:14px;align-items:center;padding:15px 0;border-top:1px solid var(--line)}
+.admin-milestone:first-child{border-top:0}
+.admin-milestone>div{display:flex;flex-direction:column;gap:5px}
+.admin-milestone small{color:var(--muted)}
+.visibility-check{flex-direction:row!important;align-items:center;white-space:nowrap}
+.visibility-check input{width:auto}
+@media(max-width:900px){.project-control-grid{grid-template-columns:1fr}.admin-milestone{grid-template-columns:1fr 1fr}.admin-milestone>div{grid-column:1/-1}}
+@media(max-width:560px){.admin-milestone{grid-template-columns:1fr}.admin-milestone>div{grid-column:auto}}
