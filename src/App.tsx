@@ -373,16 +373,16 @@ function ClientBillingPage(){
    <article className={outstanding>0?'attention-stat':''}><small>Outstanding</small><strong>{money(outstanding)}</strong><span>{openInvoiceCount?openInvoiceCount+' open invoice'+(openInvoiceCount===1?'':'s'):'Nothing due'}</span></article>
   </section>
 
-  <section className="billing-overview-grid">
-   <article className="panel billing-projects"><div className="billing-section-head"><div><p className="eyebrow">Project balances</p><h2>By project</h2></div><span>{projectGroups.length} project{projectGroups.length===1?'':'s'}</span></div>
+  <section className={'billing-overview-grid '+(projectGroups.length>1?'has-project-breakdown':'payment-only')}>
+   {projectGroups.length>1&&<article className="panel billing-projects"><div className="billing-section-head"><div><p className="eyebrow">Project balances</p><h2>By project</h2></div><span>{projectGroups.length} project{projectGroups.length===1?'':'s'}</span></div>
     <div className="project-balance-list">{projectGroups.map(g=>{const remaining=Math.max(0,g.billed-g.paid),pct=g.billed?Math.min(100,Math.round(g.paid/g.billed*100)):0;return <div className="project-balance-card" key={g.key}><div className="project-balance-head"><div><b>{g.name}</b><small>{g.invoices} invoice{g.invoices===1?'':'s'} · {money(g.billed)} billed</small></div><div><strong>{money(remaining)}</strong><small>{remaining===0?'paid in full':'remaining'}</small></div></div><div className="project-balance-progress"><div className="progress"><i style={{width:pct+'%'}}/></div><small>{money(g.paid)} paid · {pct}%</small></div></div>})}{!projectGroups.length&&<Empty>No project billing yet.</Empty>}</div>
-   </article>
-
+   </article>}
    <article className="panel billing-pay-options"><div className="billing-section-head"><div><p className="eyebrow">Ways to pay</p><h2>Payment options</h2></div></div>
     <div className="pay-option paypal-option"><div className="pay-option-icon">P</div><div><b>PayPal</b><p>Secure online checkout is available directly on any eligible open invoice below.</p></div></div>
     {methods.map(m=><div className="pay-option" key={m.id}><div className="pay-option-icon">↗</div><div><b>{m.label}</b><strong>{m.payment_handle}</strong>{m.instructions&&<p>{m.instructions}</p>}</div></div>)}
     <p className="pay-option-note">Payments are matched to your SRCcvde invoice and reflected here after they are recorded.</p>
    </article>
+
   </section>
 
   <section className="panel billing-history-panel"><div className="billing-section-head"><div><p className="eyebrow">Invoices</p><h2>Billing history</h2><p>Open balances, due dates, PDFs, and payment options stay attached to the invoice they belong to.</p></div><span>{invoices.length} total</span></div>
