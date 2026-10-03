@@ -76,3 +76,10 @@ button{touch-action:manipulation}
  body{min-height:100dvh}
  .mobile-bar{padding-top:calc(10px + env(safe-area-inset-top))}
 }
+
+/* Notification preferences */
+.notification-preferences{display:grid;gap:0;border-top:1px solid var(--line)}
+.preference-row{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:18px 0;border-bottom:1px solid var(--line)}
+.preference-row span{display:grid;gap:5px;min-width:0}.preference-row b{font-size:14px}.preference-row small{color:var(--muted);line-height:1.45}
+.preference-row input{width:20px;height:20px;flex:0 0 auto;accent-color:var(--green-soft)}
+@media(max-width:600px){.preference-row{gap:16px;align-items:flex-start}.preference-row input{margin-top:2px}}
