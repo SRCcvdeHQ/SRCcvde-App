@@ -124,7 +124,7 @@ function ClientDetail({id,navigate}:{id:string;navigate:(p:string)=>void}){
 }
 
 function ProjectsPage(){
- const[rows,setRows]=useState<Project[]>([]),[selected,setSelected]=useState<Project|null>(null),[milestones,setMilestones]=useState<Milestone[]>([]),[busy,setBusy]=useState(false),[message,setMessage]=useState('')
+ const[rows,setRows]=useState<Project[]>([]),[selected,setSelected]=useState<Project|null>(null),[milestones,setMilestones]=useState<Milestone[]>([]),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[newTitle,setNewTitle]=useState(''),[newDescription,setNewDescription]=useState('')
  const load=async()=>{const{data}=await supabase.from('projects').select('*').order('created_at',{ascending:false});setRows((data||[]) as Project[]);if(selected){const fresh=(data||[]).find((p:any)=>p.id===selected.id);if(fresh)setSelected(fresh as Project)}}
  useEffect(()=>{load()},[])
  async function openProject(p:Project){setSelected(p);setMessage('');const{data}=await supabase.from('project_milestones').select('*').eq('project_id',p.id).order('position');setMilestones((data||[]) as Milestone[])}
