@@ -163,7 +163,7 @@ function SignDocumentPage({requestId,navigate}:{requestId:string;navigate:(p:str
   <header className="review-v2-title"><p className="eyebrow">Secure document · version {version.version_number}</p><h1>{doc.name}</h1><p>Review the exact immutable document below, then complete the requested action.</p></header>
   <div className="review-v2-stack">
    <article className="review-v2-document">
-    <header><div><Brand/><small>Digital document services</small></div><span className={complete?'complete':'pending'}>{complete?'Completed':'Pending review'}</span></header>
+    <header className="review-v2-dochead"><div className="review-v2-brand"><Brand/><small>Digital document services</small></div><span className={complete?'review-v2-status complete':'review-v2-status pending'}>{complete?'Completed':'Pending review'}</span></header>
     <div className="review-v2-version"><div><small>Document integrity</small><b>Exact immutable version</b></div><span>Version {version.version_number}</span></div>
     <div className="review-v2-text">{version.content_snapshot}</div>
     <footer><div><span>SHA-256 fingerprint</span><small>This identifier verifies the exact document version you reviewed.</small></div><code>{version.content_sha256}</code></footer>
