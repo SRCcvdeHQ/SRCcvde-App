@@ -241,3 +241,29 @@ label>select{display:block;margin-top:8px}
 label>select{margin-top:0}
 .directory-tools label{margin:0}
 .directory-tools input,.directory-tools select{height:50px;min-height:50px;margin:0}
+
+/* Use one control geometry for text fields and native selects */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),select{
+  box-sizing:border-box;
+  height:50px;
+  min-height:50px;
+  padding-top:0;
+  padding-bottom:0;
+}
+select{
+  -webkit-appearance:none;
+  appearance:none;
+  padding-left:14px;
+  padding-right:44px;
+  background-image:
+    linear-gradient(45deg,transparent 50%,currentColor 50%),
+    linear-gradient(135deg,currentColor 50%,transparent 50%);
+  background-position:
+    calc(100% - 19px) 22px,
+    calc(100% - 14px) 22px;
+  background-size:5px 5px,5px 5px;
+  background-repeat:no-repeat;
+}
+.directory-tools{align-items:start}
+.directory-tools label{display:grid;grid-template-rows:auto 50px;gap:7px}
+.directory-tools .directory-count{align-self:end;padding-top:0;height:50px;display:flex;align-items:center}
