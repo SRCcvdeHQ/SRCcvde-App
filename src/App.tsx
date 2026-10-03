@@ -62,7 +62,7 @@ function NotificationsPage(){
 
 function Sidebar({role,current,navigate,onSignOut,mobileOpen=false,onNavigate}:{role:Role;current:string;navigate:(p:string)=>void;onSignOut:()=>void;mobileOpen?:boolean;onNavigate?:()=>void}){
  const admin=role!=='client'
- const items=admin?[['Overview','/'],['Leads','/leads'],['Clients','/clients'],['Projects','/projects'],['Documents','/documents'],['Activity','/activity'],['Notifications','/notifications']]:[['Overview','/'],['Project','/project'],['Actions','/actions'],['Messages','/messages'],['Documents','/documents'],['Activity','/activity'],['Notifications','/notifications']]
+ const items=admin?[['Overview','/'],['Leads','/leads'],['Clients','/clients'],['Projects','/projects'],['Documents','/documents'],['Activity','/activity'],['Notifications','/notifications']]:[['Overview','/'],['Project','/project'],['Actions','/actions'],['Messages','/messages'],['Deliverables','/deliverables'],['Documents','/documents'],['Activity','/activity'],['Notifications','/notifications']]
  return <aside className={'sidebar'+(mobileOpen?' mobile-open':'')}><Brand/><nav>{items.map(([name,p])=><button className={(p==='/'?current==='/':current.startsWith(p))?'active':''} onClick={()=>{navigate(p);onNavigate?.()}} key={p}><span>{name[0]}</span>{name}</button>)}</nav><div className="sidebar-bottom"><small>{admin?'SRCcvde team':'Client workspace'}</small><button onClick={onSignOut}>Sign out</button></div></aside>
 }
 
@@ -278,6 +278,14 @@ function ClientMessagesPage(){
  return <><PageTitle eyebrow="Messages" title="Conversation" copy="Project messages and email updates from SRCcvde stay together here." />{message&&<p className="success-message">{message}</p>}<section className="panel communications-panel"><div className="communication-history">{items.length?items.map(c=><article className={'communication-row '+(c.direction==='inbound'?'client-message':'staff-message')} key={c.id}><div className="communication-meta"><span className="communication-channel">{c.direction==='inbound'?'You':label(c.channel)}</span><small>{date(c.created_at)}</small></div><div>{c.subject&&<b>{c.subject}</b>}<p>{c.body}</p></div></article>):<div className="communication-empty"><b>No messages yet</b><p>Your SRCcvde project conversation will appear here.</p></div>}</div><form className="communication-form" onSubmit={send}><label>Reply<textarea value={body} onChange={e=>setBody(e.target.value)} placeholder="Write a message to SRCcvde…" required maxLength={5000}/></label><div className="communication-form-footer"><small>{body.length}/5000</small><button className="primary inline" disabled={busy||!body.trim()}>{busy?'Sending…':'Send message'}</button></div></form></section></>
 }
 
+function ClientDeliverablesPage(){
+ const[items,setItems]=useState<any[]>([]),[message,setMessage]=useState(''),[busy,setBusy]=useState('')
+ const load=async()=>{const{data:cms}=await supabase.from('client_memberships').select('client_id').limit(1);const cid=cms?.[0]?.client_id;if(!cid)return;const{data,error}=await supabase.from('project_deliverables').select('*').eq('client_id',cid).eq('client_visible',true).order('created_at',{ascending:false});if(error)setMessage(error.message);else setItems(data||[])}
+ useEffect(()=>{load()},[])
+ async function download(item:any){setBusy(item.id);setMessage('');const{data,error}=await supabase.storage.from(item.storage_bucket).createSignedUrl(item.storage_path,300);setBusy('');if(error||!data?.signedUrl){setMessage(error?.message||'Could not open this file.');return}window.open(data.signedUrl,'_blank','noopener,noreferrer')}
+ return <><PageTitle eyebrow="Deliverables" title="Your project files" copy="Download the files, assets and completed work SRCcvde has delivered to your project." />{message&&<p className="success-message">{message}</p>}<section className="panel client-vault">{items.length?items.map(item=><div className="doc-row vault-row" key={item.id}><div><b>{item.name}</b><small>{item.file_name} · Version {item.version} · {date(item.created_at)}</small>{item.description&&<p>{item.description}</p>}</div><div className="vault-actions"><button className="ghost" disabled={busy===item.id} onClick={()=>download(item)}>{busy===item.id?'Opening…':'Download'}</button></div></div>):<Empty>No project files have been delivered yet.</Empty>}</section></>
+}
+
 function ClientDocumentsPage({navigate}:{navigate:(p:string)=>void}){
  const[items,setItems]=useState<any[]>([]),[busy,setBusy]=useState(''),[message,setMessage]=useState(''),[query,setQuery]=useState(''),[view,setView]=useState('all')
  useEffect(()=>{supabase.rpc('get_client_document_library').then(({data,error})=>{if(error)setMessage(error.message);else setItems((data||[]) as any[])})},[])
@@ -294,6 +302,7 @@ function ClientRouter({route,profile,navigate}:{route:string;profile:Profile|nul
  if(route==='/project')return <ClientProjectPage/>
  if(route==='/actions')return <ClientActionsPage/>
  if(route==='/messages')return <ClientMessagesPage/>
+ if(route==='/deliverables')return <ClientDeliverablesPage/>
  if(route==='/documents')return <ClientDocumentsPage navigate={navigate}/>
  if(route==='/activity')return <ClientActivityPage/>
  if(route==='/notifications')return <NotificationsPage/>
