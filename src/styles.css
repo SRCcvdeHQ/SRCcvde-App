@@ -164,6 +164,14 @@ button{touch-action:manipulation}
 .client-milestone-list{display:grid;margin-top:18px}
 .client-milestone{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:14px;align-items:center;padding:16px 0;border-top:1px solid var(--line)}
 .client-milestone:first-child{border-top:0}
+.client-milestone>div:only-child{grid-column:1/-1;width:100%;min-width:0}
+.client-milestone>div:only-child>.section-head{width:100%;align-items:center;margin-bottom:12px}
+.client-milestone>div:only-child>.section-head>div{min-width:0}
+.client-milestone>div:only-child>.section-head b{display:block;font-size:1rem}
+.client-milestone>div:only-child>.section-head small{display:block;margin-top:4px;color:var(--muted);line-height:1.45}
+.client-milestone>div:only-child>.section-head>strong{flex:none;text-align:right;white-space:nowrap}
+.client-milestone>div:only-child>.progress{width:100%}
+@media(max-width:600px){.client-milestone>div:only-child>.section-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px}.client-milestone>div:only-child>.section-head>strong{font-size:1rem}}
 .milestone-index{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--line);font-size:.72rem;color:var(--muted)}
 .client-milestone.done .milestone-index,.client-milestone.current .milestone-index{border-color:var(--green);color:var(--green)}
 .milestone-copy{display:flex;flex-direction:column;gap:5px;min-width:0}
