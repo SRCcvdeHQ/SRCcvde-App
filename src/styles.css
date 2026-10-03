@@ -93,3 +93,9 @@ button{touch-action:manipulation}
 .secure-review-footer{display:grid;gap:6px;border-top:1px solid rgba(0,0,0,.12);margin:34px 0 0;padding:18px 0 0;color:#667068}.secure-review-footer span{text-transform:uppercase;letter-spacing:.1em;font:600 9px/1.5 Inter,sans-serif}.secure-review-footer code{font:500 9px/1.5 monospace;color:#667068;word-break:break-all}
 @media(max-width:900px){.secure-review-head,.secure-review-meta{align-items:flex-start;flex-direction:column}.secure-review-meta{gap:7px}}
 @media(max-width:600px){.secure-review-card{padding:24px 18px}.secure-review-body{font-size:13px}}
+
+/* Dedicated signing flow: deliberately avoids the legacy signing grid. */
+.secure-signing-flow{display:flex;align-items:flex-start;gap:22px;width:100%;min-width:0}
+.secure-signing-flow>.secure-review-card{flex:1 1 auto;min-width:0;height:max-content!important;min-height:0!important}
+.secure-signing-flow>.signing-panel{flex:0 0 min(360px,32%);min-width:300px;align-self:flex-start}
+@media(max-width:900px){.secure-signing-flow{display:block}.secure-signing-flow>.secure-review-card{width:100%}.secure-signing-flow>.signing-panel{width:100%;min-width:0;margin-top:12px;position:static}}
