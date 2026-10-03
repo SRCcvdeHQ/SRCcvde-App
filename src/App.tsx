@@ -159,14 +159,14 @@ function SignDocumentPage({requestId,navigate}:{requestId:string;navigate:(p:str
  if(!request||!version||!doc)return <p className="muted">Opening secure document…</p>
  const complete=request.status==='signed'
  return <section className="review-v2">
-  <div className="review-v2-top"><button className="back" onClick={()=>navigate('/')}>← Workspace</button><span className="review-v2-badge">NEW SECURE REVIEW</span></div>
+  <div className="review-v2-top"><button className="back" onClick={()=>navigate('/')}>← Workspace</button><span className="review-v2-badge">Secure document</span></div>
   <header className="review-v2-title"><p className="eyebrow">Secure document · version {version.version_number}</p><h1>{doc.name}</h1><p>Review the exact immutable document below, then complete the requested action.</p></header>
   <div className="review-v2-stack">
    <article className="review-v2-document">
-    <header><Brand/><span>{complete?'Completed':'Pending review'}</span></header>
-    <div className="review-v2-version"><b>Exact document version</b><span>V{version.version_number}</span></div>
+    <header><div><Brand/><small>Digital document services</small></div><span className={complete?'complete':'pending'}>{complete?'Completed':'Pending review'}</span></header>
+    <div className="review-v2-version"><div><small>Document integrity</small><b>Exact immutable version</b></div><span>Version {version.version_number}</span></div>
     <div className="review-v2-text">{version.content_snapshot}</div>
-    <footer><span>SHA-256 fingerprint</span><code>{version.content_sha256}</code></footer>
+    <footer><div><span>SHA-256 fingerprint</span><small>This identifier verifies the exact document version you reviewed.</small></div><code>{version.content_sha256}</code></footer>
    </article>
    <section className="review-v2-action">
     <div><p className="eyebrow">{request.signature_kind==='signature'?'Electronic signature':'Acknowledgment'}</p>{complete?<><h2>Completed.</h2><p className="muted">Recorded as {request.legal_name}{request.signed_at?' on '+date(request.signed_at):''}.</p></>:<><h2>{request.signature_kind==='signature'?'Sign this document':'Confirm your review'}</h2><p className="review-v2-consent">{request.consent_text}</p></>}</div>
