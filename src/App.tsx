@@ -16,6 +16,7 @@ type Communication={id:string;channel:string;direction:string;subject:string|nul
 type SignatureRequest={id:string;document_id:string;document_version_id:string;client_id:string;project_id:string|null;signer_name:string;signer_email:string;signer_side:'client'|'srccvde';signature_kind:'signature'|'acknowledgment';status:string;consent_text:string;requested_at:string;signed_at:string|null;legal_name:string|null}
 type DocumentVersion={id:string;document_id:string;version_number:number;content_snapshot:string;content_sha256:string;state:string;created_at:string}
 type Milestone={id:string;project_id:string;milestone_key:string;title:string;description:string|null;position:number;status:string;client_visible:boolean;due_at?:string|null;completed_at?:string|null}
+type ClientAction={id:string;client_id:string;project_id:string|null;title:string;description:string|null;action_type:string;status:string;due_at:string|null;response:string|null;created_at:string;completed_at:string|null}
 
 const leadStatuses=['new','contacted','discovery','proposal','contract','won','lost','archived']
 const stages=['Inquiry','Discovery','Proposal','Contract','Kickoff','Build','Launch']
@@ -255,6 +256,15 @@ function ClientActivityPage(){
  return <><PageTitle eyebrow="Activity" title="Project history" copy="A client-safe timeline of milestones, document requests and workspace updates."/><section className="panel"><div className="directory-tools"><label>Search activity<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Milestone, document, or update…"/></label><label>Type<select value={view} onChange={e=>setView(e.target.value)}><option value="all">All activity</option><option value="project">Project</option><option value="milestone">Milestones</option><option value="document">Documents</option></select></label><label>Time range<select value={range} onChange={e=>setRange(e.target.value)}><option value="all">All time</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option></select></label><span className="directory-count">{visibleEvents.length} of {events.length}</span></div></section><section className="panel activity-panel">{loading?<p className="muted">Loading activity…</p>:visibleEvents.length?visibleEvents.map(e=><div className="activity-item" key={e.id}><i/><div><b>{e.title}</b><small>{date(e.at)} · {e.detail}</small></div></div>):<Empty>{events.length?'No activity matches this view.':'No project activity yet.'}</Empty>}</section></>
 }
 
+function ClientActionsPage(){
+ const[items,setItems]=useState<ClientAction[]>([]),[busy,setBusy]=useState(''),[message,setMessage]=useState('')
+ const load=()=>supabase.from('client_action_requests').select('*').eq('client_visible',true).order('created_at',{ascending:false}).then(({data,error})=>{if(error)setMessage(error.message);else setItems((data||[]) as ClientAction[])})
+ useEffect(()=>{load()},[])
+ async function complete(a:ClientAction){setBusy(a.id);setMessage('');const{error}=await supabase.from('client_action_requests').update({status:'completed',completed_at:new Date().toISOString()}).eq('id',a.id);setBusy('');if(error)setMessage(error.message);else{setMessage('Action completed.');load()}}
+ const open=items.filter(a=>a.status!=='completed'),done=items.filter(a=>a.status==='completed')
+ return <><PageTitle eyebrow="Action center" title="What needs you" copy="Reviews, decisions and requests from SRCcvde stay together here." />{message&&<p className="success-message">{message}</p>}<section className="panel"><div className="section-head"><div><p className="eyebrow">Open</p><h2>{open.length?open.length+' action'+(open.length===1?'':'s'):'You’re all caught up.'}</h2></div></div>{open.map(a=><div className="doc-row" key={a.id}><div><b>{a.title}</b><small>{label(a.action_type)}{a.due_at?' · Due '+date(a.due_at):''}</small>{a.description&&<p className="muted">{a.description}</p>}</div><button className="ghost" disabled={busy===a.id} onClick={()=>complete(a)}>{busy===a.id?'Saving…':'Mark complete'}</button></div>)}{!open.length&&<Empty>No open actions right now.</Empty>}</section>{done.length>0&&<section className="panel"><p className="eyebrow">Completed</p><h2>Recent actions</h2>{done.slice(0,10).map(a=><div className="doc-row" key={a.id}><div><b>{a.title}</b><small>Completed{a.completed_at?' · '+date(a.completed_at):''}</small></div><StatusPill value="completed"/></div>)}</section>}</>
+}
+
 function ClientDocumentsPage({navigate}:{navigate:(p:string)=>void}){
  const[items,setItems]=useState<any[]>([]),[busy,setBusy]=useState(''),[message,setMessage]=useState(''),[query,setQuery]=useState(''),[view,setView]=useState('all')
  useEffect(()=>{supabase.rpc('get_client_document_library').then(({data,error})=>{if(error)setMessage(error.message);else setItems((data||[]) as any[])})},[])
@@ -269,6 +279,7 @@ function ClientRouter({route,profile,navigate}:{route:string;profile:Profile|nul
  const sign=route.match(/^\/documents\/([0-9a-f-]+)$/i)
  if(sign)return <SignDocumentPage requestId={sign[1]} navigate={navigate}/>
  if(route==='/project')return <ClientProjectPage/>
+ if(route==='/actions')return <ClientActionsPage/>
  if(route==='/documents')return <ClientDocumentsPage navigate={navigate}/>
  if(route==='/activity')return <ClientActivityPage/>
  if(route==='/notifications')return <NotificationsPage/>
