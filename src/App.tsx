@@ -12,7 +12,7 @@ type Note={id:string;body:string;created_at:string}
 type Activity={id:string;entity_type:string;entity_id:string;action:string;summary:string;created_at:string}
 type DocumentRow={id:string;client_id:string;name:string;category:string;state:string;client_visible:boolean;created_at:string;signature_kind?:'signature'|'acknowledgment'|null;executed_artifact_id?:string|null;drive_file_id?:string|null}
 type ExecutedArtifact={id:string;document_id:string;storage_path:string;final_sha256:string;byte_size:number;generated_at:string;drive_sync_status:'pending'|'synced'|'failed'|'not_configured';drive_file_id:string|null;drive_error:string|null;original_storage_path:string|null;original_sha256:string|null;drive_original_file_id:string|null;metadata?:{source_sha256?:string}|null}
-type Communication={id:string;channel:string;direction:string;subject:string|null;body:string;created_at:string}
+type Communication={id:string;client_id?:string;project_id?:string|null;channel:string;direction:string;subject:string|null;body:string;created_at:string;delivery_status?:string;sent_at?:string|null;delivered_at?:string|null;failed_at?:string|null}
 type SignatureRequest={id:string;document_id:string;document_version_id:string;client_id:string;project_id:string|null;signer_name:string;signer_email:string;signer_side:'client'|'srccvde';signature_kind:'signature'|'acknowledgment';status:string;consent_text:string;requested_at:string;signed_at:string|null;legal_name:string|null}
 type DocumentVersion={id:string;document_id:string;version_number:number;content_snapshot:string;content_sha256:string;state:string;created_at:string}
 type Milestone={id:string;project_id:string;milestone_key:string;title:string;description:string|null;position:number;status:string;client_visible:boolean;due_at?:string|null;completed_at?:string|null}
@@ -62,7 +62,7 @@ function NotificationsPage(){
 
 function Sidebar({role,current,navigate,onSignOut,mobileOpen=false,onNavigate}:{role:Role;current:string;navigate:(p:string)=>void;onSignOut:()=>void;mobileOpen?:boolean;onNavigate?:()=>void}){
  const admin=role!=='client'
- const items=admin?[['Overview','/'],['Leads','/leads'],['Clients','/clients'],['Projects','/projects'],['Documents','/documents'],['Activity','/activity'],['Notifications','/notifications']]:[['Overview','/'],['Project','/project'],['Actions','/actions'],['Documents','/documents'],['Activity','/activity'],['Notifications','/notifications']]
+ const items=admin?[['Overview','/'],['Leads','/leads'],['Clients','/clients'],['Projects','/projects'],['Documents','/documents'],['Activity','/activity'],['Notifications','/notifications']]:[['Overview','/'],['Project','/project'],['Actions','/actions'],['Messages','/messages'],['Documents','/documents'],['Activity','/activity'],['Notifications','/notifications']]
  return <aside className={'sidebar'+(mobileOpen?' mobile-open':'')}><Brand/><nav>{items.map(([name,p])=><button className={(p==='/'?current==='/':current.startsWith(p))?'active':''} onClick={()=>{navigate(p);onNavigate?.()}} key={p}><span>{name[0]}</span>{name}</button>)}</nav><div className="sidebar-bottom"><small>{admin?'SRCcvde team':'Client workspace'}</small><button onClick={onSignOut}>Sign out</button></div></aside>
 }
 
@@ -270,6 +270,14 @@ function ClientActionsPage(){
  return <><PageTitle eyebrow="Action center" title="What needs you" copy="Reviews, decisions and requests from SRCcvde stay together here." />{message&&<p className="success-message">{message}</p>}<section className="panel"><div className="section-head"><div><p className="eyebrow">Open</p><h2>{open.length?open.length+' action'+(open.length===1?'':'s'):'You’re all caught up.'}</h2></div></div>{open.map(a=><div className="doc-row" key={a.id}><div><b>{a.title}</b><small>{label(a.action_type)}{a.due_at?' · Due '+date(a.due_at):''}</small>{a.description&&<p className="muted">{a.description}</p>}</div><button className="ghost" disabled={busy===a.id} onClick={()=>complete(a)}>{busy===a.id?'Saving…':'Mark complete'}</button></div>)}{!open.length&&<Empty>No open actions right now.</Empty>}</section>{done.length>0&&<section className="panel"><p className="eyebrow">Completed</p><h2>Recent actions</h2>{done.slice(0,10).map(a=><div className="doc-row" key={a.id}><div><b>{a.title}</b><small>Completed{a.completed_at?' · '+date(a.completed_at):''}</small></div><StatusPill value="completed"/></div>)}</section>}</>
 }
 
+function ClientMessagesPage(){
+ const[items,setItems]=useState<Communication[]>([]),[clientId,setClientId]=useState(''),[projectId,setProjectId]=useState<string|null>(null),[body,setBody]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState('')
+ const load=async()=>{const{data:cms,error:membershipError}=await supabase.from('client_memberships').select('client_id').limit(1);if(membershipError){setMessage(membershipError.message);return}const cid=cms?.[0]?.client_id||'';setClientId(cid);if(!cid)return;const[{data:rows,error},{data:projects}]=await Promise.all([supabase.from('client_communications').select('*').eq('client_id',cid).eq('client_visible',true).order('created_at',{ascending:true}),supabase.from('projects').select('id').eq('client_id',cid).order('created_at').limit(1)]);if(error)setMessage(error.message);else setItems((rows||[]) as Communication[]);setProjectId(projects?.[0]?.id||null)}
+ useEffect(()=>{load()},[])
+ async function send(e:FormEvent){e.preventDefault();if(!body.trim()||!clientId)return;setBusy(true);setMessage('');const{data:{user}}=await supabase.auth.getUser();const{error}=await supabase.from('client_communications').insert({client_id:clientId,project_id:projectId,channel:'portal',direction:'inbound',subject:null,body:body.trim(),created_by:user?.id||null,client_visible:true,delivery_status:'logged'});setBusy(false);if(error)setMessage(error.message);else{setBody('');await load()}}
+ return <><PageTitle eyebrow="Messages" title="Conversation" copy="Project messages and email updates from SRCcvde stay together here." />{message&&<p className="success-message">{message}</p>}<section className="panel communications-panel"><div className="communication-history">{items.length?items.map(c=><article className={'communication-row '+(c.direction==='inbound'?'client-message':'staff-message')} key={c.id}><div className="communication-meta"><span className="communication-channel">{c.direction==='inbound'?'You':label(c.channel)}</span><small>{date(c.created_at)}</small></div><div>{c.subject&&<b>{c.subject}</b>}<p>{c.body}</p></div></article>):<div className="communication-empty"><b>No messages yet</b><p>Your SRCcvde project conversation will appear here.</p></div>}</div><form className="communication-form" onSubmit={send}><label>Reply<textarea value={body} onChange={e=>setBody(e.target.value)} placeholder="Write a message to SRCcvde…" required maxLength={5000}/></label><div className="communication-form-footer"><small>{body.length}/5000</small><button className="primary inline" disabled={busy||!body.trim()}>{busy?'Sending…':'Send message'}</button></div></form></section></>
+}
+
 function ClientDocumentsPage({navigate}:{navigate:(p:string)=>void}){
  const[items,setItems]=useState<any[]>([]),[busy,setBusy]=useState(''),[message,setMessage]=useState(''),[query,setQuery]=useState(''),[view,setView]=useState('all')
  useEffect(()=>{supabase.rpc('get_client_document_library').then(({data,error})=>{if(error)setMessage(error.message);else setItems((data||[]) as any[])})},[])
@@ -285,6 +293,7 @@ function ClientRouter({route,profile,navigate}:{route:string;profile:Profile|nul
  if(sign)return <SignDocumentPage requestId={sign[1]} navigate={navigate}/>
  if(route==='/project')return <ClientProjectPage/>
  if(route==='/actions')return <ClientActionsPage/>
+ if(route==='/messages')return <ClientMessagesPage/>
  if(route==='/documents')return <ClientDocumentsPage navigate={navigate}/>
  if(route==='/activity')return <ClientActivityPage/>
  if(route==='/notifications')return <NotificationsPage/>
