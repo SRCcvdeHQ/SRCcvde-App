@@ -207,6 +207,23 @@ function ClientDashboard({profile,navigate}:{profile:Profile|null;navigate:(p:st
  {!inquiry&&!client&&<Empty>Your workspace is being prepared.</Empty>}</>
 }
 
+
+function ClientProjectPage(){
+ const[project,setProject]=useState<Project|null>(null),[milestones,setMilestones]=useState<Milestone[]>([]),[loading,setLoading]=useState(true)
+ useEffect(()=>{(async()=>{const{data:cms}=await supabase.from('client_memberships').select('client_id').limit(1);const clientId=cms?.[0]?.client_id;if(!clientId){setLoading(false);return}const{data:p}=await supabase.from('projects').select('*').eq('client_id',clientId).order('created_at').limit(1);const proj=(p?.[0]||null) as Project|null;setProject(proj);if(proj){const{data:ms}=await supabase.from('project_milestones').select('*').eq('project_id',proj.id).eq('client_visible',true).order('position');setMilestones((ms||[]) as Milestone[])}setLoading(false)})()},[])
+ if(loading)return <p className="muted">Loading project…</p>
+ if(!project)return <><PageTitle eyebrow="Project" title="Your project" copy="Your project workspace will appear here when your build begins."/><Empty>No active project yet.</Empty></>
+ return <><PageTitle eyebrow="Project" title={project.name} copy="Your live roadmap, progress and milestones in one place."/>
+ <section className="timeline-card project-hero"><div className="section-head"><div><p className="eyebrow">Live progress</p><h2>{label(project.phase)}</h2></div><StatusPill value={project.status}/></div><div className="client-progress"><div><span>{milestones.filter(m=>m.status==='completed').length} of {milestones.length} milestones complete</span><strong>{project.progress}%</strong></div><div className="progress"><i style={{width:project.progress+'%'}}/></div></div></section>
+ <section className="panel milestone-panel"><div className="section-head"><div><p className="eyebrow">Roadmap</p><h2>Where your build stands.</h2></div><span className="status">{label(project.phase)}</span></div><div className="client-milestone-list">{milestones.length?milestones.map((m,n)=><div className={'client-milestone '+(m.status==='completed'?'done':m.status==='current'?'current':'')} key={m.id}><div className="milestone-index">{m.status==='completed'?'✓':String(n+1).padStart(2,'0')}</div><div className="milestone-copy"><b>{m.title}</b><small>{m.description||label(m.status)}</small></div><div className="milestone-meta"><StatusPill value={m.status}/>{m.due_at&&<small>Due {date(m.due_at)}</small>}</div></div>):<Empty>Your roadmap is being prepared.</Empty>}</div></section></>
+}
+
+function ClientActivityPage(){
+ const[events,setEvents]=useState<{id:string;title:string;detail:string;at:string}[]>([]),[loading,setLoading]=useState(true)
+ useEffect(()=>{(async()=>{const{data:cms}=await supabase.from('client_memberships').select('client_id').limit(1);const clientId=cms?.[0]?.client_id;if(!clientId){setLoading(false);return}const[{data:projects},{data:docs},{data:reqs}]=await Promise.all([supabase.from('projects').select('*').eq('client_id',clientId).order('created_at'),supabase.from('client_documents').select('*').eq('client_id',clientId).eq('client_visible',true),supabase.from('signature_requests').select('*').eq('client_id',clientId).eq('signer_side','client')]);const proj=(projects?.[0]||null) as Project|null;let ms:Milestone[]=[];if(proj){const{data}=await supabase.from('project_milestones').select('*').eq('project_id',proj.id).eq('client_visible',true);ms=(data||[]) as Milestone[]}const out:{id:string;title:string;detail:string;at:string}[]=[];(docs||[]).forEach((d:any)=>out.push({id:'d'+d.id,title:d.name+' shared',detail:label(d.category)+' added to your document vault',at:d.created_at}));(reqs||[]).forEach((q:any)=>{out.push({id:'r'+q.id,title:q.status==='signed'?'Document completed':'Review requested',detail:q.status==='signed'?'Your document action was recorded':'A document is waiting for your review',at:q.signed_at||q.requested_at})});ms.filter(m=>m.completed_at).forEach(m=>out.push({id:'m'+m.id,title:m.title+' completed',detail:'Project milestone completed',at:m.completed_at!}));if(proj)out.push({id:'p'+proj.id,title:'Project workspace created',detail:proj.name,at:proj.created_at});out.sort((a,b)=>new Date(b.at).getTime()-new Date(a.at).getTime());setEvents(out);setLoading(false)})()},[])
+ return <><PageTitle eyebrow="Activity" title="Project history" copy="A client-safe timeline of milestones, document requests and workspace updates."/><section className="panel activity-panel">{loading?<p className="muted">Loading activity…</p>:events.length?events.map(e=><div className="activity-item" key={e.id}><i/><div><b>{e.title}</b><small>{date(e.at)} · {e.detail}</small></div></div>):<Empty>No project activity yet.</Empty>}</section></>
+}
+
 function ClientDocumentsPage({navigate}:{navigate:(p:string)=>void}){
  const[items,setItems]=useState<any[]>([]),[busy,setBusy]=useState(''),[message,setMessage]=useState('')
  useEffect(()=>{supabase.rpc('get_client_document_library').then(({data,error})=>{if(error)setMessage(error.message);else setItems((data||[]) as any[])})},[])
@@ -219,7 +236,9 @@ function ClientDocumentsPage({navigate}:{navigate:(p:string)=>void}){
 function ClientRouter({route,profile,navigate}:{route:string;profile:Profile|null;navigate:(p:string)=>void}){
  const sign=route.match(/^\/documents\/([0-9a-f-]+)$/i)
  if(sign)return <SignDocumentPage requestId={sign[1]} navigate={navigate}/>
+ if(route==='/project')return <ClientProjectPage/>
  if(route==='/documents')return <ClientDocumentsPage navigate={navigate}/>
+ if(route==='/activity')return <ClientActivityPage/>
  if(route==='/notifications')return <NotificationsPage/>
  return <ClientDashboard profile={profile} navigate={navigate}/>
 }
