@@ -41,6 +41,11 @@ function SetPassword(){
  return <main className="auth-page"><section className="auth-copy"><Brand/><p className="eyebrow">SRCcvde Workspace</p><h1>Make this workspace yours.</h1><p>Create the password you'll use whenever you return to app.srccvde.com.</p></section><section className="auth-panel"><form onSubmit={submit}><p className="eyebrow">Account setup</p><h2>Set your password.</h2><label>New password<input type="password" autoComplete="new-password" value={password} onChange={e=>setPassword(e.target.value)} required minLength={8}/></label><label>Confirm password<input type="password" autoComplete="new-password" value={confirm} onChange={e=>setConfirm(e.target.value)} required minLength={8}/></label><button className="primary" disabled={busy}>{busy?'Saving…':'Save password & continue'}</button>{message&&<p className="form-message">{message}</p>}</form></section></main>
 }
 
+function NotificationsPage(){
+ const categories=[['Project updates','Milestones, status changes, and project activity.'],['Documents & signatures','Documents that need review, signature, or acknowledgment.'],['Approvals','Decisions and approvals waiting for you.'],['Messages','New workspace messages and replies.'],['Billing','Invoice and payment-status updates.'],['Security & account','Important account and security activity.'],['Product news & marketing','Optional SRCcvde product news. Off by default.']]
+ return <><header className="page-title"><p className="eyebrow">Device preferences</p><h1>Notifications</h1><p>Choose how SRCcvde keeps you updated on this device.</p></header><section className="panel"><div className="section-head"><div><p className="eyebrow">Permission</p><h2>Push notifications</h2></div><span className="status-pill">Not enabled</span></div><p className="muted">SRCcvde will only ask your browser or installed app for notification permission after you choose to enable it. Notification previews may appear on your lock screen depending on your device settings.</p><button className="primary" disabled>Enable notifications — coming next</button></section><section className="panel"><div className="section-head"><div><p className="eyebrow">Preferences</p><h2>What can notify you</h2></div></div><div className="notification-preferences">{categories.map(([name,copy])=><div className="preference-row" key={name}><span><b>{name}</b><small>{copy}</small></span><input type="checkbox" checked={name!=='Product news & marketing'} disabled readOnly aria-label={name}/></div>)}</div><p className="muted">These controls are being connected to your saved preferences next. Marketing remains separate from operational notifications.</p></section></>
+}
+
 function Sidebar({role,current,navigate,onSignOut,mobileOpen=false,onNavigate}:{role:Role;current:string;navigate:(p:string)=>void;onSignOut:()=>void;mobileOpen?:boolean;onNavigate?:()=>void}){
  const admin=role!=='client'
  const items=admin?[['Overview','/'],['Leads','/leads'],['Clients','/clients'],['Projects','/projects'],['Documents','/documents'],['Activity','/activity'],['Notifications','/notifications']]:[['Overview','/'],['Project','/project'],['Documents','/documents'],['Activity','/activity'],['Notifications','/notifications']]
@@ -165,6 +170,7 @@ function ClientRouter({route,profile,navigate}:{route:string;profile:Profile|nul
  const sign=route.match(/^\/documents\/([0-9a-f-]+)$/i)
  if(sign)return <SignDocumentPage requestId={sign[1]} navigate={navigate}/>
  if(route==='/documents')return <ClientDocumentsPage navigate={navigate}/>
+ if(route==='/notifications')return <NotificationsPage/>
  return <ClientDashboard profile={profile} navigate={navigate}/>
 }
 
@@ -179,6 +185,7 @@ function AdminRouter({route,profile,navigate}:{route:string;profile:Profile|null
  if(route==='/projects')return <ProjectsPage/>
  if(route==='/documents')return <DocumentsPage/>
  if(route==='/activity')return <ActivityPage/>
+ if(route==='/notifications')return <NotificationsPage/>
  return <AdminOverview profile={profile} navigate={navigate}/>
 }
 
