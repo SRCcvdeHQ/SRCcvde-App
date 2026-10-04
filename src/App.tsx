@@ -18,6 +18,104 @@ type DocumentVersion={id:string;document_id:string;version_number:number;content
 type Milestone={id:string;project_id:string;milestone_key:string;title:string;description:string|null;position:number;status:string;client_visible:boolean;due_at?:string|null;completed_at?:string|null}
 type ClientAction={id:string;client_id:string;project_id:string|null;title:string;description:string|null;action_type:string;status:string;due_at:string|null;response:string|null;created_at:string;completed_at:string|null}
 type BillingInvoice={id:string;client_id:string;project_id:string|null;invoice_number:string;status:string;currency:string;subtotal_cents:number;tax_cents:number;total_cents:number;amount_paid_cents:number;issued_at:string|null;due_at:string|null;paid_at:string|null;notes:string|null;client_visible:boolean;created_at:string;artifact_path?:string|null;finalized_at?:string|null;clients?:{name:string}|null;projects?:{name:string}|null}
+type DocumentTemplate={id:string;label:string;documentName:string;category:string;signatureKind:'signature'|'acknowledgment';buildContent:(clientName:string,projectName:string)=>string}
+const documentTemplates:DocumentTemplate[]=[
+ {id:'service-agreement',label:'Service Agreement / Contract',documentName:'Service Agreement',category:'agreement',signatureKind:'signature',buildContent:(clientName,projectName)=>[
+  'SERVICE AGREEMENT',
+  '',
+  'Effective date: [Enter date]',
+  'Client: '+clientName,
+  'Client legal entity: [Enter legal entity, if applicable]',
+  'Service provider: SRCcvde',
+  'Project: '+projectName,
+  '',
+  '1. PROJECT PURPOSE',
+  '[Describe the project goals and intended outcome.]',
+  '',
+  '2. SCOPE AND DELIVERABLES',
+  '[List the included work, deliverables, and exclusions.]',
+  '',
+  '3. SCHEDULE',
+  '[List milestones, target dates, and dependencies.]',
+  '',
+  '4. FEES AND PAYMENT',
+  '[Enter fees, payment schedule, and any approved expenses or taxes.]',
+  '',
+  '5. CLIENT INPUTS AND APPROVALS',
+  '[Describe required access, materials, feedback, and approval timing.]',
+  '',
+  '6. CHANGES AND ADDITIONAL SERVICES',
+  '[Insert the approved process for changes outside this scope.]',
+  '',
+  '7. OTHER AGREED TERMS',
+  '[Insert SRCcvde-approved contract language and any project-specific terms.]'
+ ].join('\n')},
+ {id:'project-addendum',label:'Project Addendum',documentName:'Project Addendum',category:'agreement',signatureKind:'signature',buildContent:(clientName,projectName)=>[
+  'PROJECT ADDENDUM',
+  '',
+  'Effective date: [Enter date]',
+  'Client: '+clientName,
+  'Service provider: SRCcvde',
+  'Project: '+projectName,
+  'Related agreement: [Enter agreement title and date]',
+  '',
+  '1. PURPOSE OF THIS ADDENDUM',
+  '[Describe why this addendum is being issued.]',
+  '',
+  '2. CHANGES TO THE PROJECT',
+  '[Describe each addition, replacement, or revision.]',
+  '',
+  '3. FEES AND SCHEDULE IMPACT',
+  '[Describe any approved price, payment, or timeline changes.]',
+  '',
+  '4. OTHER AGREED TERMS',
+  '[State how this addendum relates to the existing agreement using SRCcvde-approved language.]'
+ ].join('\n')},
+ {id:'additional-services',label:'Additional Services Add-on',documentName:'Additional Services Add-on',category:'scope',signatureKind:'signature',buildContent:(clientName,projectName)=>[
+  'ADDITIONAL SERVICES ADD-ON',
+  '',
+  'Effective date: [Enter date]',
+  'Client: '+clientName,
+  'Service provider: SRCcvde',
+  'Project: '+projectName,
+  '',
+  '1. REQUESTED ADDITIONAL SERVICES',
+  '[Describe the new services and why they are being added.]',
+  '',
+  '2. ADDITIONAL DELIVERABLES',
+  '[List the specific outputs included in this add-on.]',
+  '',
+  '3. FEES AND PAYMENT',
+  '[Enter the approved fee and payment schedule.]',
+  '',
+  '4. SCHEDULE',
+  '[Enter the additional work dates and any impact on existing milestones.]',
+  '',
+  '5. APPROVED TERMS',
+  '[Insert SRCcvde-approved terms for this add-on.]'
+ ].join('\n')},
+ {id:'scope-change',label:'Scope Change Order',documentName:'Scope Change Order',category:'scope',signatureKind:'signature',buildContent:(clientName,projectName)=>[
+  'SCOPE CHANGE ORDER',
+  '',
+  'Request date: [Enter date]',
+  'Client: '+clientName,
+  'Service provider: SRCcvde',
+  'Project: '+projectName,
+  'Requested by: [Enter name]',
+  '',
+  '1. REQUESTED CHANGE',
+  '[Describe the requested change and reason.]',
+  '',
+  '2. SCOPE IMPACT',
+  '[Describe work added, removed, or revised.]',
+  '',
+  '3. COST AND SCHEDULE IMPACT',
+  '[Enter approved cost and schedule adjustments.]',
+  '',
+  '4. APPROVAL NOTES',
+  '[Add any approved conditions or project-specific terms.]'
+ ].join('\n')}
+]
 const MAX_PROJECT_FILE_BYTES=25*1024*1024
 const PROJECT_FILE_EXTENSIONS=['pdf','png','jpg','jpeg','webp','svg','zip','doc','docx','xls','xlsx','csv','txt','md']
 function validateProjectFile(file:File){if(file.size>MAX_PROJECT_FILE_BYTES)return 'Files must be 25 MB or smaller.';const ext=file.name.split('.').pop()?.toLowerCase()||'';if(!PROJECT_FILE_EXTENSIONS.includes(ext))return 'Unsupported file type. Use PDF, images, ZIP, Office files, CSV, TXT or Markdown.';return ''}
@@ -128,12 +226,13 @@ function ClientsPage({navigate}:{navigate:(p:string)=>void}){
 
 function ClientDetail({id,navigate}:{id:string;navigate:(p:string)=>void}){
  const[client,setClient]=useState<(Client&{portal_unlocked?:boolean})|null>(null),[projects,setProjects]=useState<Project[]>([]),[clientMilestones,setClientMilestones]=useState<Milestone[]>([]),[docs,setDocs]=useState<DocumentRow[]>([]),[comms,setComms]=useState<Communication[]>([]),[activity,setActivity]=useState<Activity[]>([]),[requests,setRequests]=useState<SignatureRequest[]>([]),[actions,setActions]=useState<ClientAction[]>([]),[deliverables,setDeliverables]=useState<any[]>([]),[fileView,setFileView]=useState('all'),[selectedDeliveryProject,setSelectedDeliveryProject]=useState(''),[selectedWorkProject,setSelectedWorkProject]=useState(''),[fileQuery,setFileQuery]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[downloadUrl,setDownloadUrl]=useState('')
- const[docName,setDocName]=useState(''),[docCategory,setDocCategory]=useState('agreement'),[docKind,setDocKind]=useState('signature'),[docContent,setDocContent]=useState(''),[commSubject,setCommSubject]=useState(''),[commBody,setCommBody]=useState(''),[commChannel,setCommChannel]=useState('portal'),[actionTitle,setActionTitle]=useState(''),[actionDescription,setActionDescription]=useState(''),[actionType,setActionType]=useState('review'),[actionDue,setActionDue]=useState(''),[deliveryName,setDeliveryName]=useState(''),[deliveryDescription,setDeliveryDescription]=useState(''),[deliveryCategory,setDeliveryCategory]=useState('deliverable'),[deliveryFile,setDeliveryFile]=useState<File|null>(null)
+ const[docName,setDocName]=useState(''),[docCategory,setDocCategory]=useState('agreement'),[docKind,setDocKind]=useState('signature'),[docContent,setDocContent]=useState(''),[docTemplate,setDocTemplate]=useState('service-agreement'),[commSubject,setCommSubject]=useState(''),[commBody,setCommBody]=useState(''),[commChannel,setCommChannel]=useState('portal'),[actionTitle,setActionTitle]=useState(''),[actionDescription,setActionDescription]=useState(''),[actionType,setActionType]=useState('review'),[actionDue,setActionDue]=useState(''),[deliveryName,setDeliveryName]=useState(''),[deliveryDescription,setDeliveryDescription]=useState(''),[deliveryCategory,setDeliveryCategory]=useState('deliverable'),[deliveryFile,setDeliveryFile]=useState<File|null>(null)
  const load=async()=>{const[c,p,d,m,a,s,x,y]=await Promise.all([supabase.from('clients').select('*').eq('id',id).single(),supabase.from('projects').select('*').eq('client_id',id).order('created_at'),supabase.from('client_documents').select('*').eq('client_id',id).order('created_at',{ascending:false}),supabase.from('client_communications').select('*').eq('client_id',id).order('created_at',{ascending:false}),supabase.from('crm_activity').select('*').eq('entity_type','client').eq('entity_id',id).order('created_at',{ascending:false}),supabase.from('signature_requests').select('*').eq('client_id',id).order('requested_at',{ascending:false}),supabase.from('client_action_requests').select('*').eq('client_id',id).order('created_at',{ascending:false}),supabase.from('project_deliverables').select('*').eq('client_id',id).order('created_at',{ascending:false})]);setClient(c.data as Client&{portal_unlocked?:boolean});const projectRows=(p.data||[]) as Project[];setProjects(projectRows);if(projectRows.length){const{data:ms}=await supabase.from('project_milestones').select('*').in('project_id',projectRows.map(x=>x.id));setClientMilestones((ms||[]) as Milestone[])}else setClientMilestones([]);setDocs((d.data||[]) as DocumentRow[]);setComms((m.data||[]) as Communication[]);setActivity((a.data||[]) as Activity[]);setRequests((s.data||[]) as SignatureRequest[]);setActions((x.data||[]) as ClientAction[]);setDeliverables(y.data||[])}
  useEffect(()=>{load();const timer=window.setInterval(()=>{supabase.from('client_communications').select('*').eq('client_id',id).order('created_at',{ascending:false}).then(({data})=>{if(data)setComms(data as Communication[])})},3000);return()=>window.clearInterval(timer)},[id])
  useEffect(()=>{const preferred=projects.find(p=>!['completed','archived'].includes(p.status))?.id||projects[0]?.id||'';if(!selectedDeliveryProject&&preferred)setSelectedDeliveryProject(preferred);if(!selectedWorkProject&&preferred)setSelectedWorkProject(preferred)},[projects,selectedDeliveryProject,selectedWorkProject])
  async function invite(){setBusy(true);setMessage('');const{data,error}=await supabase.functions.invoke('invite-client',{body:{client_id:id}});setBusy(false);setMessage(error?error.message:(data?.invitation_sent?'Portal invitation sent.':'Client account linked.'));if(!error)load()}
- async function createDocument(e:FormEvent){e.preventDefault();const project=projects.find(p=>p.id===selectedWorkProject);if(!project)return setMessage('Choose a project first.');setBusy(true);setMessage('');const{error}=await supabase.rpc('create_signable_document',{p_client_id:id,p_project_id:project.id,p_name:docName,p_category:docCategory,p_content:docContent,p_signature_kind:docKind});setBusy(false);if(error)setMessage(error.message);else{setDocName('');setDocContent('');setMessage('Document sent to the client workspace.');await supabase.functions.invoke('dispatch-notifications');load()}}
+ function applyDocumentTemplate(){const template=documentTemplates.find(t=>t.id===docTemplate),project=projects.find(p=>p.id===selectedWorkProject);if(!template)return;if(!project){setMessage('Choose a project before loading a document template.');return}setDocName(template.documentName+' — '+project.name);setDocCategory(template.category);setDocKind(template.signatureKind);setDocContent(template.buildContent(client?.name||'Client',project.name));setMessage('Template loaded. Replace every bracketed field and review the exact version before sending.')}
+  async function createDocument(e:FormEvent){e.preventDefault();const project=projects.find(p=>p.id===selectedWorkProject);if(!project)return setMessage('Choose a project first.');setBusy(true);setMessage('');const{error}=await supabase.rpc('create_signable_document',{p_client_id:id,p_project_id:project.id,p_name:docName,p_category:docCategory,p_content:docContent,p_signature_kind:docKind});setBusy(false);if(error)setMessage(error.message);else{setDocName('');setDocContent('');setMessage('Document sent to the client workspace.');await supabase.functions.invoke('dispatch-notifications');load()}}
  async function countersign(documentId:string){const legalName=prompt('Type your legal name to countersign this exact document version.');if(!legalName)return;setBusy(true);setMessage('');setDownloadUrl('');const{error}=await supabase.rpc('countersign_document',{p_document_id:documentId,p_legal_name:legalName});if(error){setBusy(false);setMessage(error.message);return}const{data,error:finalError}=await supabase.functions.invoke('finalize-executed-document',{body:{document_id:documentId}});setBusy(false);if(finalError)setMessage('Fully executed. PDF archive needs attention: '+finalError.message);else{setMessage(data?.drive?.status==='synced'?'Fully executed and archived to Google Drive.':'Fully executed. Secure PDF generated; Google Drive sync is waiting for its one-time connection.');setDownloadUrl(data?.download_url||'')}await supabase.functions.invoke('dispatch-notifications');load()}
  async function retryArchive(documentId:string){setBusy(true);setMessage('');setDownloadUrl('');const{data,error}=await supabase.functions.invoke('finalize-executed-document',{body:{document_id:documentId}});setBusy(false);if(error)setMessage('PDF archive still needs attention: '+error.message);else{setMessage(data?.drive?.status==='synced'?'Executed PDF generated and archived to Google Drive.':'Executed PDF generated. Google Drive archive status: '+(data?.drive?.status||data?.artifact?.drive_sync_status||'pending')+'.');setDownloadUrl(data?.download_url||'')}load()}
  async function createClientAction(e:FormEvent){e.preventDefault();if(!actionTitle.trim())return;setBusy(true);setMessage('');const{data:{user}}=await supabase.auth.getUser();const{error}=await supabase.from('client_action_requests').insert({client_id:id,project_id:selectedWorkProject||null,title:actionTitle.trim(),description:actionDescription.trim()||null,action_type:actionType,status:'open',due_at:actionDue?new Date(actionDue+'T12:00:00').toISOString():null,client_visible:true,created_by:user?.id||null});setBusy(false);if(error)setMessage(error.message);else{setActionTitle('');setActionDescription('');setActionDue('');setMessage('Client action created.');await supabase.functions.invoke('dispatch-notifications');load()}}
@@ -155,7 +254,7 @@ function ClientDetail({id,navigate}:{id:string;navigate:(p:string)=>void}){
  <section className="panel"><div className="section-head"><div><p className="eyebrow">Client actions</p><h2>Action center</h2><p className="section-copy">Create clear reviews, decisions and requests that appear in the client workspace.</p></div><span className="status">{actions.filter(a=>a.status!=='completed').length} open</span></div><form className="document-form" onSubmit={createClientAction}><label>Action title<input value={actionTitle} onChange={e=>setActionTitle(e.target.value)} placeholder="Review homepage direction" required maxLength={160}/></label><div className="form-split"><label>Type<select value={actionType} onChange={e=>setActionType(e.target.value)}><option value="review">Review</option><option value="approval">Approval</option><option value="decision">Decision</option><option value="information">Information request</option></select></label><label>Due date<input type="date" value={actionDue} onChange={e=>setActionDue(e.target.value)}/></label></div><label>Details<textarea value={actionDescription} onChange={e=>setActionDescription(e.target.value)} placeholder="What does the client need to review, decide, or provide?" maxLength={2000}/></label><button className="primary" disabled={busy||!actionTitle.trim()}>Add to client action center</button></form><div className="communication-history">{actions.slice(0,8).map(a=><article className="communication-row" key={a.id}><div className="communication-meta"><span className="communication-channel">{label(a.action_type)}</span><small>{a.due_at?'Due '+date(a.due_at):'No due date'}</small></div><div><b>{a.title}</b>{a.description&&<p>{a.description}</p>}</div>{a.status!=='completed'?<button className="ghost" disabled={busy} onClick={()=>closeClientAction(a)}>Complete</button>:<StatusPill value="completed"/>}</article>)}{!actions.length&&<div className="communication-empty"><b>No client actions yet</b><p>Requests you create here will appear in the client's Action Center.</p></div>}</div></section>
  <section className="panel"><div className="section-head"><div><p className="eyebrow">Project files</p><h2>Shared workspace</h2><p className="section-copy">Deliver finished work to the client and review files they have shared with SRCcvde.</p></div><span className="status">{deliverables.length}</span></div><form className="document-form" onSubmit={uploadDeliverable}><div className="form-split"><label>Project<select value={selectedDeliveryProject} onChange={e=>setSelectedDeliveryProject(e.target.value)} required><option value="">Select project</option>{projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label><label>Display name<input value={deliveryName} onChange={e=>setDeliveryName(e.target.value)} placeholder="Homepage assets"/></label></div><div className="form-split"><label>Category<select value={deliveryCategory} onChange={e=>setDeliveryCategory(e.target.value)}><option value="deliverable">Deliverable</option><option value="branding">Branding</option><option value="content">Content</option><option value="source">Source package</option><option value="document">Document</option><option value="other">Other</option></select></label></div><label>Client notes<textarea value={deliveryDescription} onChange={e=>setDeliveryDescription(e.target.value)} placeholder="What is included or what should the client know?"/></label><label>Choose file<input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.svg,.zip,.doc,.docx,.xls,.xlsx,.csv,.txt,.md" onChange={e=>setDeliveryFile(e.target.files?.[0]||null)} required/></label><button className="primary" disabled={busy||!deliveryFile||!projects.length}>{busy?'Uploading…':'Deliver to client'}</button></form><div className="directory-tools"><label>Search files<input value={fileQuery} onChange={e=>setFileQuery(e.target.value)} placeholder="Name, category, notes…"/></label><label>Show<select value={fileView} onChange={e=>setFileView(e.target.value)}><option value="all">All shared files</option><option value="client">Client uploads</option><option value="srccvde">SRCcvde deliveries</option></select></label><span className="directory-count">{visibleDeliverables.length} files</span></div><div className="communication-history">{visibleDeliverables.slice(0,24).map(item=><article className="communication-row" key={item.id}><div className="communication-meta"><span className="communication-channel">{item.source==='client'?'Client upload':'SRCcvde delivery'}</span><small>{label(item.category||'deliverable')} · v{item.version||1} · {date(item.created_at)}</small></div><div><b>{item.name}</b><p>{item.file_name}{item.description?' · '+item.description:''}</p></div><div className="detail-actions"><button className="ghost" onClick={()=>openDeliverable(item)}>Open</button>{item.source==='srccvde'&&<button className="ghost" disabled={busy} onClick={()=>replaceDeliverable(item)}>New version</button>}<button className="ghost" disabled={busy} onClick={()=>toggleDeliverableVisibility(item)}>{item.client_visible?'Hide':'Show'}</button><button className="ghost" disabled={busy} onClick={()=>deleteDeliverable(item)}>Delete</button></div></article>)}{!visibleDeliverables.length&&<div className="communication-empty"><b>No files in this view</b><p>Client uploads and SRCcvde deliverables will appear here together.</p></div>}</div></section>
  <section className="panel communications-panel"><div className="section-head"><div><p className="eyebrow">Communications</p><h2>Client history</h2><p className="section-copy">Keep a clean internal record of calls, emails, meetings and client updates.</p></div><span className="status">{comms.length}</span></div><form className="communication-form" onSubmit={logCommunication}><div className="communication-form-head"><div><b>{commChannel==='email'?'Send client email':'Log an interaction'}</b><small>{commChannel==='email'?'Sends from hello@srccvde.com and records the message in client history.':'Phone, meeting, text and portal entries are recorded in SRCcvde; they are not sent externally.'}</small></div></div><div className="communication-fields"><label>Channel<select value={commChannel} onChange={e=>setCommChannel(e.target.value)}><option value="email">Email</option><option value="portal">Portal</option><option value="phone">Phone</option><option value="meeting">Meeting</option><option value="text">Text</option></select></label><label>Subject<input value={commSubject} onChange={e=>setCommSubject(e.target.value)} placeholder="e.g. Project kickoff" maxLength={160} required={commChannel==='email'}/></label></div><label>{commChannel==='email'?'Message':'Notes'}<textarea value={commBody} onChange={e=>setCommBody(e.target.value)} placeholder={commChannel==='email'?'Write the email to '+client.primary_contact_name+'…':'What was discussed, decided, or promised?'} required maxLength={5000}/></label><div className="communication-form-footer"><small>{commBody.length}/5000{commChannel==='email'?' · To '+client.primary_email:''}</small><button className="primary inline" disabled={busy||!commBody.trim()||(commChannel==='email'&&!commSubject.trim())}>{busy?(commChannel==='email'?'Sending…':'Saving…'):(commChannel==='email'?'Send email':'Log interaction')}</button></div></form><div className="communication-history">{comms.length?comms.slice(0,8).map(c=><article className="communication-row" key={c.id}><div className="communication-meta"><span className="communication-channel">{label(c.channel)}</span><small>{date(c.created_at)} · {label(c.direction)}{c.channel==='email'&&c.delivery_status?' · '+label(c.delivery_status):''}</small></div><div><b>{c.subject||'Client interaction'}</b><p>{c.body}</p></div></article>):<div className="communication-empty"><b>No communication history yet</b><p>Your logged calls, emails, meetings and updates will appear here.</p></div>}</div></section>
- <section className="panel"><p className="eyebrow">Create document</p><h2>Send an exact version for review</h2><form className="document-form" onSubmit={createDocument}><label>Document name<input value={docName} onChange={e=>setDocName(e.target.value)} placeholder="Project Agreement" required/></label><div className="form-split"><label>Category<select value={docCategory} onChange={e=>setDocCategory(e.target.value)}><option value="agreement">Agreement</option><option value="proposal">Proposal</option><option value="scope">Scope</option><option value="approval">Approval</option></select></label><label>Action<select value={docKind} onChange={e=>setDocKind(e.target.value)}><option value="signature">Signature required</option><option value="acknowledgment">Acknowledgment required</option></select></label></div><label>Exact document content<textarea className="document-editor" value={docContent} onChange={e=>setDocContent(e.target.value)} placeholder="Paste or compose the exact version the client will review…" required minLength={20}/></label><button className="primary" disabled={busy}>Send to client workspace</button></form></section></section><aside><ActivityFeed rows={activity}/></aside></div></>
+ <section className="panel"><p className="eyebrow">Create document</p><h2>Send an exact version for review</h2><form className="document-form" onSubmit={createDocument}><div className="form-split"><label>Starting template<select value={docTemplate} onChange={e=>setDocTemplate(e.target.value)}>{documentTemplates.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}</select></label><button className="ghost inline" type="button" disabled={busy||!projects.length} onClick={applyDocumentTemplate}>Load template</button></div><p className="muted">Templates are editable starting points. Replace every bracketed field and add approved terms before sending; the client reviews and signs the exact version shown below.</p><label>Document name<input value={docName} onChange={e=>setDocName(e.target.value)} placeholder="Project Agreement" required/></label><div className="form-split"><label>Category<select value={docCategory} onChange={e=>setDocCategory(e.target.value)}><option value="agreement">Agreement</option><option value="proposal">Proposal</option><option value="scope">Scope</option><option value="approval">Approval</option></select></label><label>Action<select value={docKind} onChange={e=>setDocKind(e.target.value)}><option value="signature">Signature required</option><option value="acknowledgment">Acknowledgment required</option></select></label></div><label>Exact document content<textarea className="document-editor" value={docContent} onChange={e=>setDocContent(e.target.value)} placeholder="Choose a template or compose the exact version the client will review…" required minLength={20}/></label><button className="primary" disabled={busy}>Send to client workspace</button></form></section></section><aside><ActivityFeed rows={activity}/></aside></div></>
 }
 
 function ProjectsPage(){
