@@ -420,3 +420,15 @@ body :is(.eyebrow,.live-dot,.status,.fine,.form-message,.pipeline-head,.lead-car
  .app-shell{min-height:100dvh;overflow:visible}
  .workspace{min-height:calc(100dvh - 64px);overflow:visible}
 }
+
+
+/* Auth layout: stack before the copy and sign-in form become cramped. */
+.auth-page{grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr)}
+.auth-copy,.auth-panel{min-width:0}
+.stage-preview{width:100%}
+@media(max-width:1024px){
+ .auth-page{grid-template-columns:1fr}
+ .auth-copy{min-height:42vh;padding:90px 28px 36px}
+ .auth-copy>.brand{top:28px}
+ .auth-panel{border-left:0;border-top:1px solid var(--line);padding:42px 28px}
+}
