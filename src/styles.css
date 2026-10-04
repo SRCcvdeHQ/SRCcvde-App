@@ -361,3 +361,56 @@ html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}body{overscroll-behavi
 .load-error{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 14px;border:1px solid rgba(170,92,82,.45);border-radius:10px;background:rgba(102,37,32,.16);color:#e3c7c3;font-size:13px}
 .load-error .ghost{flex-shrink:0}
 @media(max-width:520px){.load-error{align-items:flex-start;flex-direction:column;gap:10px}}
+
+/* Typography system: consistent SRCcvde type, hierarchy, and readable metadata */
+:root{
+ --font-display:"Plus Jakarta Sans",Inter,sans-serif;
+ --font-body:Inter,sans-serif;
+ --type-body:1rem;
+ --type-small:.8125rem;
+ --type-label:.875rem;
+ --type-meta:.75rem;
+}
+body,button,input,textarea,select{font-family:var(--font-body)}
+body{font-size:var(--type-body);line-height:1.6}
+h1,h2,h3,.brand,.metric-grid strong,.record-grid strong,.client-progress>div:first-child strong,
+.billing-hero-status span,.billing-stats strong,.project-balance-head strong,.invoice-amount strong,
+.payment-card>strong{font-family:var(--font-display),sans-serif}
+h1,h2,h3{line-height:1.12}
+p{line-height:1.65}
+label{font-size:var(--type-label);line-height:1.45}
+body :is(.eyebrow,.live-dot,.status,.fine,.form-message,.stage-preview b,.stage-preview span,
+.sidebar nav button span,.metric-grid small,.record-grid small,.metric-grid span,.record-grid span,
+.empty,.lead-row>span,.avatar,.pill,.pipeline-head,.lead-card p,.lead-card footer,.pipeline-empty,
+.facts small,.facts b,.identity .avatar,.activity-item b,.activity-item small,.client-row>span:last-child,
+.client-progress>div:first-child span,.timeline b,.timeline small,.signature-card>span:last-child,
+.document-sheet-head>span,.document-meta,.document-paper footer span,.document-paper footer code,
+.consent-copy,.sync-state,.secure-review-head>span,.secure-review-meta,.secure-review-body,
+.review-v2-badge,.review-v2-version b,.review-v2-document>footer code,.review-v2-status,
+.review-v2-version>span,.workspace-stats span,.milestone-index,.summary-link,
+.project-control-grid label,.admin-milestone label,.milestone-create label,.communication-form label,
+.communication-form-footer small,.communication-channel,.directory-tools label,.directory-count,
+.paypal-checkout em,.invoice-label,.invoice-financials>small,.invoice-split small,.invoice-split b,
+.billing-progress>div:first-child,.billing-stats small,.billing-stats span,.billing-section-head>span,
+.project-balance-head small,.project-balance-progress>small,.pay-option p,.pay-option-note,
+.invoice-title-line>div>small,.invoice-amount>small,.invoice-balance small,.invoice-main>p,
+.attention-summary small,.attention-summary span,.attention-health,.notification-health-grid small,
+.offline-banner,.load-error){font-size:var(--type-meta);line-height:1.45}
+body :is(.stage-preview b,.stage-preview span,.sidebar nav button span,.metric-grid small,
+.record-grid small,.metric-grid span,.record-grid span,.empty,.lead-row>span,.avatar,.pill,
+.lead-card p,.pipeline-empty,.facts small,.activity-item small,.client-row>span:last-child,
+.timeline small,.signature-card>span:last-child,.document-sheet-head>span,.document-meta,
+.document-paper footer span,.document-paper footer code,.secure-review-head>span,
+.secure-review-meta,.review-v2-badge,.review-v2-version b,.review-v2-document>footer code,
+.review-v2-status,.review-v2-version>span,.milestone-index,.communication-form-footer small,
+.communication-channel,.directory-count,.paypal-checkout em,.invoice-label,.invoice-financials>small,
+.invoice-split small,.billing-stats small,.billing-section-head>span,.project-balance-head small,
+.project-balance-progress>small,.invoice-title-line>div>small,.invoice-amount>small,
+.invoice-balance small){font-size:11px}
+body :is(.eyebrow,.live-dot,.status,.fine,.form-message,.pipeline-head,.lead-card footer,.facts b,
+.activity-item b,.client-progress>div:first-child span,.timeline b,.document-paper footer span,
+.document-paper footer code,.consent-copy,.secure-review-body,.workspace-stats span,.summary-link,
+.project-control-grid label,.admin-milestone label,.milestone-create label,.communication-form label,
+.directory-tools label,.invoice-split b,.billing-progress>div:first-child,.billing-stats span,
+.pay-option p,.pay-option-note,.invoice-main>p,.attention-summary small,.attention-summary span,
+.attention-health,.notification-health-grid small,.offline-banner,.load-error){font-size:var(--type-small)}
