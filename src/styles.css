@@ -357,3 +357,7 @@ html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}body{overscroll-behavi
  .workspace{padding-left:max(14px,env(safe-area-inset-left));padding-right:max(14px,env(safe-area-inset-right))}
  .primary,.secondary,.ghost,.back,.text-button{min-height:44px}
 }
+
+.load-error{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 14px;border:1px solid rgba(170,92,82,.45);border-radius:10px;background:rgba(102,37,32,.16);color:#e3c7c3;font-size:13px}
+.load-error .ghost{flex-shrink:0}
+@media(max-width:520px){.load-error{align-items:flex-start;flex-direction:column;gap:10px}}
