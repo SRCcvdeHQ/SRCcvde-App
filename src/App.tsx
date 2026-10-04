@@ -365,7 +365,9 @@ function ClientBillingPage(){
  async function openClientInvoicePdf(inv:BillingInvoice){const{data,error}=await supabase.functions.invoke('invoice-pdf-download',{body:{invoice_id:inv.id}});if(error||!data?.url)return;window.open(data.url,'_blank','noopener,noreferrer')}
  async function openReceipt(p:any){const{data}=await supabase.functions.invoke('payment-receipt-download',{body:{payment_id:p.id}});if(data?.url)window.open(data.url,'_blank','noopener,noreferrer')}
  const activeInvoices=invoices.filter(i=>i.status!=='void')
- const successfulPayments=payments.filter(p=>p.status==='succeeded')
+ const visibleInvoiceIds=new Set(invoices.map(i=>i.id))
+ const visiblePayments=payments.filter(p=>visibleInvoiceIds.has(p.invoice_id))
+ const successfulPayments=visiblePayments.filter(p=>p.status==='succeeded')
  const totalBilled=activeInvoices.reduce((n,i)=>n+i.total_cents,0)
  const totalPaid=activeInvoices.reduce((n,i)=>n+Math.min(i.total_cents,i.amount_paid_cents||0),0)
  const outstanding=Math.max(0,totalBilled-totalPaid)
@@ -409,7 +411,7 @@ function ClientBillingPage(){
   </section>
 
   <section className="panel billing-payments-panel"><div className="billing-section-head"><div><p className="eyebrow">Payments</p><h2>Payment history</h2><p>Your confirmed payments and downloadable receipts.</p></div><span>{successfulPayments.length} received</span></div>
-   <div className="payment-list">{payments.map(p=><article className="payment-card" key={p.id}><div className="payment-mark">✓</div><div className="payment-copy"><b>{p.method_label||'Payment'}</b><small>{p.paid_at?date(p.paid_at):date(p.created_at)}{p.reference?' · Ref '+p.reference:''}</small></div><strong>{money(p.amount_cents,p.currency)}</strong><div className="payment-actions"><StatusPill value={p.status}/>{p.artifact_path&&<button className="ghost" onClick={()=>openReceipt(p)}>Receipt PDF</button>}</div></article>)}{!payments.length&&<Empty>No payments recorded yet.</Empty>}</div>
+   <div className="payment-list">{visiblePayments.map(p=><article className="payment-card" key={p.id}><div className="payment-mark">✓</div><div className="payment-copy"><b>{p.method_label||'Payment'}</b><small>{p.paid_at?date(p.paid_at):date(p.created_at)}{p.reference?' · Ref '+p.reference:''}</small></div><strong>{money(p.amount_cents,p.currency)}</strong><div className="payment-actions"><StatusPill value={p.status}/>{p.artifact_path&&<button className="ghost" onClick={()=>openReceipt(p)}>Receipt PDF</button>}</div></article>)}{!visiblePayments.length&&<Empty>No payments recorded yet.</Empty>}</div>
   </section>
  </div>
 }
