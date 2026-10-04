@@ -1,4 +1,4 @@
-const CACHE='srccvde-shell-v6';
+const CACHE='srccvde-shell-v7';
 const SHELL=['/','/index.html','/manifest.webmanifest','/app-icon.svg'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -16,7 +16,7 @@ self.addEventListener('fetch',event=>{
 self.addEventListener('push',event=>{
  let data={};try{data=event.data?event.data.json():{}}catch{data={body:event.data?.text()||''}}
  const title=data.title||'SRCcvde';
- const options={body:data.body||'You have an update in your SRCcvde workspace.',icon:'/app-icon.svg',badge:'/app-icon.svg',tag:data.tag||'srccvde-update',data:{url:data.url||'/'},renotify:Boolean(data.renotify)};
+ const options={body:data.body||'You have an update in your SRCcvde workspace.',icon:'/app-icon.svg',badge:'/app-icon.svg',tag:data.tag||'srccvde-update',data:{url:data.url||'/'},renotify:Boolean(data.renotify),silent:false};
  event.waitUntil(self.registration.showNotification(title,options));
 });
 self.addEventListener('notificationclick',event=>{
