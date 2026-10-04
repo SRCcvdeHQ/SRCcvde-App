@@ -6,7 +6,7 @@ async function receipt(inv:any,p:any){
  const dark=rgb(.06,.08,.07),green=rgb(.12,.45,.27),muted=rgb(.38,.4,.39),line=rgb(.86,.88,.87),soft=rgb(.95,.97,.96);
  const left=54,right=558,width=504;
  const safe=(v:any)=>String(v??"").replace(/[\r\n]+/g," ").trim();
- const clip=(text:string,font:any,size:number,max:number)=>{let s=safe(text);while(s.length>1&&font.widthOfTextAtSize(s,size)>max)s=s.slice(0,-1);return s!==safe(text)?s.slice(0,-1)+"…":s};
+ const clip=(text:string,font:any,size:number,max:number)=>{let s=safe(text);while(s.length>1&&font.widthOfTextAtSize(s,size)>max)s=s.slice(0,-1);return s!==safe(text)?s.slice(0,-3)+"...":s};
  const rightText=(text:string,y:number,size=10,font=b,color=dark)=>{const s=safe(text),w=font.widthOfTextAtSize(s,size);pg.drawText(s,{x:Math.max(left,right-w),y,size,font,color})};
  const labelValue=(label:string,value:string,y:number)=>{pg.drawText(label,{x:left,y,size:9,font:r,color:muted});rightText(value,y,10,b,dark)};
  pg.drawText("SRC",{x:left,y:738,size:23,font:b,color:dark});pg.drawText("cvde",{x:97,y:738,size:23,font:r,color:dark});pg.drawRectangle({x:left,y:729,width:28,height:3,color:green});
