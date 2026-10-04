@@ -11,7 +11,7 @@
   "orientation": "any",
   "categories": ["business", "productivity"],
   "icons": [
-    {"src":"/app-icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}
+    {"src":"/app-icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}
   ],
   "shortcuts": [
     {"name":"Documents","short_name":"Documents","url":"/documents"},
