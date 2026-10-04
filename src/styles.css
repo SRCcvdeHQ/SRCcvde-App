@@ -344,3 +344,16 @@ html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}body{overscroll-behavi
 
 /* Beta accessibility + installed-app finishing */
 .skip-link{position:fixed;z-index:1000;left:16px;top:calc(10px + env(safe-area-inset-top));padding:10px 14px;border-radius:9px;background:var(--cream);color:var(--bg);font-weight:700;text-decoration:none;transform:translateY(-180%);transition:transform .15s ease}.skip-link:focus{transform:translateY(0);outline:3px solid var(--tan);outline-offset:3px}.workspace:focus{outline:none}.auth-page,.pending,.loading{min-height:100dvh}.mobile-scrim{touch-action:none}.sidebar nav button,.lead-row,.client-row,.signature-card,.project-row-button{touch-action:manipulation}@media(max-width:520px){.topbar h1{font-size:clamp(30px,10vw,40px)}.workspace{padding-top:22px}.panel button:not(.compact-action),.attention-item button,.invoice-card-actions button{min-height:44px}}
+
+/* Beta readiness — touch, safe-area, and keyboard polish */
+@supports (height:100dvh){.sidebar{height:100dvh}}
+@media(max-width:900px){
+ .mobile-menu-button{width:44px;height:44px;min-width:44px;min-height:44px;position:relative;flex:0 0 44px}
+ .mobile-bar{padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right))}
+ .sidebar{padding-left:max(18px,env(safe-area-inset-left));overscroll-behavior:contain}
+ .workspace{padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right))}
+}
+@media(max-width:520px){
+ .workspace{padding-left:max(14px,env(safe-area-inset-left));padding-right:max(14px,env(safe-area-inset-right))}
+ .primary,.secondary,.ghost,.back,.text-button{min-height:44px}
+}
