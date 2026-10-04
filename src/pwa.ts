@@ -2,12 +2,6 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     try {
       const registration = await navigator.serviceWorker.register('/sw.js')
-      let refreshing = false
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (refreshing) return
-        refreshing = true
-        window.location.reload()
-      })
       const checkForUpdate = () => registration.update().catch(() => undefined)
       await checkForUpdate()
       window.addEventListener('focus', checkForUpdate)
