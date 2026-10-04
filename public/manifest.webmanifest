@@ -9,11 +9,12 @@
   "background_color": "#0A0D0B",
   "theme_color": "#0A0D0B",
   "orientation": "any",
+  "categories": ["business", "productivity"],
   "icons": [
-    {"src":"/app-icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}
+    {"src":"/app-icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}
   ],
   "shortcuts": [
     {"name":"Documents","short_name":"Documents","url":"/documents"},
-    {"name":"Projects","short_name":"Projects","url":"/projects"}
+    {"name":"Billing","short_name":"Billing","url":"/billing"}
   ]
 }
