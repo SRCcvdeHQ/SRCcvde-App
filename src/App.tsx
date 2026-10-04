@@ -598,7 +598,7 @@ export default function App(){
    if(alive){setSession(data.session);setLoading(false)}
   }
   boot()
-  const{data:{subscription}}=supabase.auth.onAuthStateChange((event,s)=>{if(event==='PASSWORD_RECOVERY')setPasswordFlow(true);setSession(s);if(!s){setMembership(null);setProfile(null)}})
+  const{data:{subscription}}=supabase.auth.onAuthStateChange((event,s)=>{if(event==='PASSWORD_RECOVERY')setPasswordFlow(true);setSession(s);if(!s){setMobileNav(false);setMembership(null);setProfile(null)}})
   return()=>{alive=false;subscription.unsubscribe()}
  },[])
  useEffect(()=>{const up=()=>setOnline(true),down=()=>setOnline(false);addEventListener('online',up);addEventListener('offline',down);return()=>{removeEventListener('online',up);removeEventListener('offline',down)}},[])
