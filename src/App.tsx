@@ -163,7 +163,7 @@ function Login(){
     </header>
     <form className="auth-form" onSubmit={submit}>
      <label htmlFor="auth-email">Email address<input id="auth-email" type="email" autoComplete="email" inputMode="email" autoCapitalize="none" spellCheck={false} value={email} onChange={e=>setEmail(e.target.value)} required/></label>
-     <label htmlFor="auth-password">Password<div className="auth-password"><input id="auth-password" type={showPassword?'text':'password'} autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required/><button className="auth-password-toggle" type="button" aria-label={showPassword?'Hide password':'Show password'} aria-pressed={showPassword} onClick={()=>setShowPassword(v=>!v)}>{showPassword?'Hide':'Show'}</button></div></label>
+     <div className="auth-password-field"><label htmlFor="auth-password">Password</label><div className="auth-password"><input id="auth-password" type={showPassword?'text':'password'} autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required/><button className="auth-password-toggle" type="button" aria-label={showPassword?'Hide password':'Show password'} aria-pressed={showPassword} onClick={()=>setShowPassword(v=>!v)}>{showPassword?'Hide':'Show'}</button></div></div>
      <div className="auth-form-meta"><button className="text-button" type="button" onClick={reset} disabled={busy}>Forgot password?</button></div>
      <button className="primary auth-submit" disabled={busy}>{busy?'Signing in…':'Sign in'}</button>
      {message&&<p id="auth-message" className="form-message" role="status" aria-live="polite">{message}</p>}
