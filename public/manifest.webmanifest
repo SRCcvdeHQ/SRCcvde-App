@@ -15,6 +15,7 @@
   ],
   "shortcuts": [
     {"name":"Documents","short_name":"Documents","url":"/documents"},
-    {"name":"Billing","short_name":"Billing","url":"/billing"}
+    {"name":"Billing","short_name":"Billing","url":"/billing"},
+    {"name":"Notifications","short_name":"Notifications","url":"/notifications"}
   ]
 }
