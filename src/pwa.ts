@@ -33,6 +33,10 @@ if ('serviceWorker' in navigator) {
       await checkForUpdate()
       await checkForNewBuild()
       window.addEventListener('focus', checkEverything)
+      window.addEventListener('online', checkEverything)
+      window.addEventListener('pageshow', event => {
+        if (event.persisted) checkEverything()
+      })
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') checkEverything()
       })
