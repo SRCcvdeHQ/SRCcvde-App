@@ -781,3 +781,49 @@ body{min-width:0}
  .admin-billing-page .ghost,.admin-billing-page .primary{max-width:100%}
  .admin-billing-page .invoice-preview{padding:18px}
 }
+
+
+/* Documents + secure signing responsive hardening */
+.document-index,.drive-connect,.review-v2,.review-v2-stack,.review-v2-document,.review-v2-action,
+.vault-row,.vault-actions,.signature-card,.google-credential-form{min-width:0;max-width:100%}
+.vault-row>*,.signature-card>*,.review-v2-document>*,.review-v2-action>*,
+.google-credential-form>*{min-width:0;max-width:100%}
+.vault-row b,.vault-row small,.signature-card b,.signature-card small,
+.review-v2-title h1,.review-v2-title p,.review-v2-text,.review-v2-consent,
+.connected-drive b,.connected-drive small{overflow-wrap:anywhere}
+.vault-actions{min-width:0}
+.sync-state{max-width:100%;white-space:normal;overflow-wrap:anywhere;text-align:center}
+.review-v2-document{box-sizing:border-box;overflow:hidden}
+.review-v2-document>footer code{display:block;max-width:100%;overflow-wrap:anywhere;word-break:break-all}
+.review-v2-version>*{min-width:0}
+.review-v2-form,.review-v2-form label,.review-v2-form input,
+.google-credential-form,.google-credential-form label,.google-credential-form input{width:100%;min-width:0;max-width:100%}
+
+@media(max-width:700px){
+ .document-index .directory-tools{grid-template-columns:minmax(0,1fr)}
+ .vault-row{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;padding:16px 0}
+ .vault-actions{display:grid;grid-template-columns:minmax(0,1fr);width:100%;justify-content:stretch}
+ .vault-actions .ghost,.vault-actions .sync-state{width:100%;max-width:100%}
+ .signature-card{align-items:flex-start}
+ .signature-card>div{min-width:0}
+ .review-v2-top,.review-v2-document>header,.review-v2-version{align-items:flex-start;flex-direction:column}
+ .review-v2-action{grid-template-columns:minmax(0,1fr);gap:18px;padding:20px}
+ .review-v2-form{grid-template-columns:minmax(0,1fr)}
+ .connected-drive{align-items:flex-start;flex-direction:column}
+ .connected-drive .ghost,.drive-connect .primary{width:100%;max-width:100%}
+ .google-credential-form{max-width:100%}
+}
+
+@media(max-width:480px){
+ .review-v2{width:100%;max-width:100%}
+ .review-v2-top{gap:10px}
+ .review-v2-top .back,.review-v2-badge{max-width:100%}
+ .review-v2-title h1{font-size:clamp(28px,9vw,38px)}
+ .review-v2-document{padding:20px 16px;border-radius:12px}
+ .review-v2-text{font-size:13px;line-height:1.68}
+ .review-v2-action{padding:16px;border-radius:12px}
+ .signature-card{padding:13px}
+ .signature-card>div{align-items:flex-start}
+ .signature-icon{flex:0 0 36px}
+ .drive-connect .section-head>span{max-width:100%}
+}
