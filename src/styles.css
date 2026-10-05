@@ -1009,3 +1009,22 @@ body{min-width:0}
  .notification-device .detail-actions{width:100%}
  .notification-device .detail-actions .ghost{width:100%;max-width:100%}
 }
+
+
+/* Mobile login breathing-room polish */
+@media(max-width:600px){
+ .auth-copy{padding-top:calc(24px + env(safe-area-inset-top));padding-bottom:18px}
+ .auth-story{margin-top:30px}
+ .auth-story .eyebrow{margin-bottom:14px;line-height:1.45}
+ .auth-story h1{font-size:clamp(33px,8.6vw,44px);line-height:1.08}
+ .auth-story>p:not(.eyebrow){margin-top:20px;font-size:14px;line-height:1.7}
+ .auth-panel{padding-top:20px}
+ .auth-card{padding:30px 22px}
+ .auth-card-head{margin-bottom:30px}
+ .auth-card-head .eyebrow{margin-bottom:16px;line-height:1.45}
+ .auth-card-head h2{font-size:31px;line-height:1.08}
+ .auth-card-head>p:last-child{margin-top:15px;font-size:13px;line-height:1.65}
+ .auth-form label{gap:11px;margin-bottom:21px}
+ .auth-password-field{gap:11px;margin-bottom:22px}
+ .auth-form-meta{margin:0 0 16px}
+}
