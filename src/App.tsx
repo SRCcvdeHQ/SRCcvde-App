@@ -18,102 +18,141 @@ type DocumentVersion={id:string;document_id:string;version_number:number;content
 type Milestone={id:string;project_id:string;milestone_key:string;title:string;description:string|null;position:number;status:string;client_visible:boolean;due_at?:string|null;completed_at?:string|null}
 type ClientAction={id:string;client_id:string;project_id:string|null;title:string;description:string|null;action_type:string;status:string;due_at:string|null;response:string|null;created_at:string;completed_at:string|null}
 type BillingInvoice={id:string;client_id:string;project_id:string|null;invoice_number:string;status:string;currency:string;subtotal_cents:number;tax_cents:number;total_cents:number;amount_paid_cents:number;issued_at:string|null;due_at:string|null;paid_at:string|null;notes:string|null;client_visible:boolean;created_at:string;artifact_path?:string|null;finalized_at?:string|null;clients?:{name:string}|null;projects?:{name:string}|null}
-type DocumentTemplate={id:string;label:string;documentName:string;category:string;signatureKind:'signature'|'acknowledgment';buildContent:(clientName:string,projectName:string)=>string}
+type TemplateContext={clientName:string;clientContact:string;clientEmail:string;projectName:string;projectType:string;projectPhase:string;today:string}
+type DocumentTemplate={id:string;label:string;description:string;documentName:string;category:string;signatureKind:'signature'|'acknowledgment';buildContent:(ctx:TemplateContext)=>string}
+const commonParties=(ctx:TemplateContext)=>[
+ 'Date: '+ctx.today,
+ 'Client: '+ctx.clientName,
+ 'Primary contact: '+ctx.clientContact+' <'+ctx.clientEmail+'>',
+ 'Service provider: SRCcvde',
+ 'Project: '+ctx.projectName,
+ 'Project type: '+ctx.projectType,
+ 'Current project phase: '+ctx.projectPhase
+]
 const documentTemplates:DocumentTemplate[]=[
- {id:'service-agreement',label:'Service Agreement / Contract',documentName:'Service Agreement',category:'agreement',signatureKind:'signature',buildContent:(clientName,projectName)=>[
-  'SERVICE AGREEMENT',
-  '',
-  'Effective date: [Enter date]',
-  'Client: '+clientName,
-  'Client legal entity: [Enter legal entity, if applicable]',
-  'Service provider: SRCcvde',
-  'Project: '+projectName,
-  '',
-  '1. PROJECT PURPOSE',
-  '[Describe the project goals and intended outcome.]',
-  '',
-  '2. SCOPE AND DELIVERABLES',
-  '[List the included work, deliverables, and exclusions.]',
-  '',
-  '3. SCHEDULE',
-  '[List milestones, target dates, and dependencies.]',
-  '',
-  '4. FEES AND PAYMENT',
-  '[Enter fees, payment schedule, and any approved expenses or taxes.]',
-  '',
-  '5. CLIENT INPUTS AND APPROVALS',
-  '[Describe required access, materials, feedback, and approval timing.]',
-  '',
-  '6. CHANGES AND ADDITIONAL SERVICES',
-  '[Insert the approved process for changes outside this scope.]',
-  '',
-  '7. OTHER AGREED TERMS',
-  '[Insert SRCcvde-approved contract language and any project-specific terms.]'
+ {id:'service-agreement',label:'Service Agreement / Contract',description:'Primary agreement for a new client project. Use before substantive build work begins.',documentName:'Service Agreement',category:'agreement',signatureKind:'signature',buildContent:(ctx)=>[
+  'SERVICE AGREEMENT','',...commonParties(ctx),'',
+  '1. PROJECT PURPOSE','[REQUIRED: Describe the project goals and intended outcome.]','',
+  '2. SCOPE AND DELIVERABLES','[REQUIRED: List the included work, deliverables, platforms, and explicit exclusions.]','',
+  '3. SCHEDULE AND CLIENT DEPENDENCIES','[REQUIRED: State target dates, milestones, client-supplied materials/access, and expected review turnaround.]',
+  'Target dates are estimates unless expressly stated otherwise. Delays in client materials, approvals, access, or third-party services may reasonably shift the schedule.','',
+  '4. FEES AND PAYMENT','[REQUIRED: State project price, deposit/payment schedule, taxes if applicable, and any approved expenses.]',
+  'Work may be paused for overdue balances. SRCcvde retains access to and control of source materials necessary to perform the work until all amounts due for the project are paid in full.','',
+  '5. CHANGES AND ADDITIONAL SERVICES',
+  'Work outside the agreed scope requires written approval through a Scope Change Order, Additional Services Add-on, or other signed amendment. Approved changes may affect price and schedule.','',
+  '6. CLIENT RESPONSIBILITIES AND APPROVALS',
+  'The Client is responsible for timely feedback, approvals, credentials, content, brand assets, and other materials reasonably required for the project. The Client represents that it has the right to provide and authorize use of materials it supplies.','',
+  '7. INTELLECTUAL PROPERTY AND OWNERSHIP',
+  'Upon payment in full, the Client owns the final custom deliverables created specifically for the Client under this agreement, excluding SRCcvde pre-existing tools, reusable components, libraries, know-how, development methods, and third-party materials. Until payment in full, SRCcvde retains source access and ownership rights necessary to secure payment and complete the engagement.','',
+  '8. PORTFOLIO RIGHTS',
+  'Unless the parties agree in writing to a security or confidentiality exception, SRCcvde may identify the Client and display non-confidential portions of the completed work in its portfolio, website, proposals, and marketing materials after public launch.','',
+  '9. THIRD-PARTY SERVICES',
+  'Hosting, domains, payment processors, app stores, APIs, software subscriptions, and other third-party services are subject to their own terms, pricing, uptime, and policies. Unless expressly included in scope, the Client is responsible for third-party fees and accounts.','',
+  '10. CONFIDENTIALITY',
+  'Each party will use reasonable care to protect non-public business, technical, and customer information received from the other and will use it only for the engagement, except where disclosure is required by law or the information is independently public or lawfully obtained.','',
+  '11. ACCEPTANCE AND LAUNCH',
+  'The Client will review deliverables and identify material issues within the agreed review period. Launch, written approval, or continued production use may constitute acceptance of the applicable deliverable, subject to any written unresolved punch-list items.','',
+  '12. SUPPORT AND AFTERCARE',
+  'Ongoing maintenance, content changes, new features, monitoring, hosting administration, or support after the included post-launch period are not included unless stated in scope or covered by a separate Aftercare & Maintenance Agreement.','',
+  '13. TERMINATION',
+  'Either party may terminate the engagement in writing. The Client remains responsible for approved work performed and non-cancellable costs incurred through the termination date. SRCcvde will provide paid-for deliverables reasonably available at termination after outstanding balances are resolved.','',
+  '14. WARRANTIES AND LIMITATION',
+  'SRCcvde will perform services in a professional and workmanlike manner. Except for express commitments in this agreement, deliverables and third-party services are provided without additional warranties to the maximum extent permitted by law. Neither party will be liable for indirect, incidental, special, or consequential damages to the extent permitted by law. [REQUIRED: Confirm any negotiated liability cap or special warranty terms.]','',
+  '15. GOVERNING TERMS',
+  '[REQUIRED: Confirm governing state, venue, and any dispute-resolution terms approved for this engagement.]','',
+  '16. ELECTRONIC SIGNATURES; ENTIRE AGREEMENT',
+  'Electronic signatures and counterparts are intended to be effective as originals. This agreement and its signed exhibits, statements of work, addenda, and change orders contain the parties\' agreement for this project and supersede inconsistent prior project discussions.','',
+  '17. PROJECT-SPECIFIC TERMS','[OPTIONAL: Add any negotiated terms that do not conflict with the sections above.]'
  ].join('\n')},
- {id:'project-addendum',label:'Project Addendum',documentName:'Project Addendum',category:'agreement',signatureKind:'signature',buildContent:(clientName,projectName)=>[
-  'PROJECT ADDENDUM',
-  '',
-  'Effective date: [Enter date]',
-  'Client: '+clientName,
-  'Service provider: SRCcvde',
-  'Project: '+projectName,
-  'Related agreement: [Enter agreement title and date]',
-  '',
-  '1. PURPOSE OF THIS ADDENDUM',
-  '[Describe why this addendum is being issued.]',
-  '',
-  '2. CHANGES TO THE PROJECT',
-  '[Describe each addition, replacement, or revision.]',
-  '',
-  '3. FEES AND SCHEDULE IMPACT',
-  '[Describe any approved price, payment, or timeline changes.]',
-  '',
-  '4. OTHER AGREED TERMS',
-  '[State how this addendum relates to the existing agreement using SRCcvde-approved language.]'
+ {id:'statement-of-work',label:'Proposal / Statement of Work',description:'Defines the recommended solution, deliverables, timeline, assumptions, and price before the main contract or as its project exhibit.',documentName:'Statement of Work',category:'proposal',signatureKind:'signature',buildContent:(ctx)=>[
+  'PROPOSAL / STATEMENT OF WORK','',...commonParties(ctx),'',
+  '1. CLIENT OBJECTIVE','[REQUIRED: Describe the problem, goal, and intended outcome.]','',
+  '2. PROPOSED SOLUTION','SRCcvde proposes a '+ctx.projectType+' engagement for '+ctx.projectName+'.','[REQUIRED: Describe the recommended solution and user experience.]','',
+  '3. DELIVERABLES','[REQUIRED: List each concrete deliverable and what is not included.]','',
+  '4. PROJECT PLAN','[REQUIRED: Describe stages, target dates, review windows, and launch assumptions.]','',
+  '5. CLIENT INPUTS','[REQUIRED: List content, credentials, approvals, files, and decisions required from the Client.]','',
+  '6. INVESTMENT','[REQUIRED: State price, deposit, payment milestones, taxes, and recurring third-party costs.]','',
+  '7. ASSUMPTIONS','[REQUIRED: State material assumptions used to estimate the work.]','',
+  '8. ACCEPTANCE',
+  'Approval of this Statement of Work authorizes SRCcvde to proceed subject to the governing Service Agreement and any stated payment requirements.'
  ].join('\n')},
- {id:'additional-services',label:'Additional Services Add-on',documentName:'Additional Services Add-on',category:'scope',signatureKind:'signature',buildContent:(clientName,projectName)=>[
-  'ADDITIONAL SERVICES ADD-ON',
-  '',
-  'Effective date: [Enter date]',
-  'Client: '+clientName,
-  'Service provider: SRCcvde',
-  'Project: '+projectName,
-  '',
-  '1. REQUESTED ADDITIONAL SERVICES',
-  '[Describe the new services and why they are being added.]',
-  '',
-  '2. ADDITIONAL DELIVERABLES',
-  '[List the specific outputs included in this add-on.]',
-  '',
-  '3. FEES AND PAYMENT',
-  '[Enter the approved fee and payment schedule.]',
-  '',
-  '4. SCHEDULE',
-  '[Enter the additional work dates and any impact on existing milestones.]',
-  '',
-  '5. APPROVED TERMS',
-  '[Insert SRCcvde-approved terms for this add-on.]'
+ {id:'project-addendum',label:'Project Addendum',description:'Changes a contractual term in an existing signed agreement without replacing the entire agreement.',documentName:'Project Addendum',category:'agreement',signatureKind:'signature',buildContent:(ctx)=>[
+  'PROJECT ADDENDUM','',...commonParties(ctx),'',
+  'Related agreement: [REQUIRED: Enter agreement title and effective date]','',
+  '1. PURPOSE','[REQUIRED: Explain why this addendum is needed.]','',
+  '2. AGREEMENT CHANGES','[REQUIRED: Identify the exact term(s) being added, replaced, or revised.]','',
+  '3. PRICE OR SCHEDULE EFFECT','[REQUIRED: State any price/payment/timeline effect, or state "No change."]','',
+  '4. CONTINUING TERMS',
+  'Except as expressly changed by this addendum, the existing agreement remains in effect. If this addendum conflicts with the existing agreement, this addendum controls only as to the subject matter stated here.'
  ].join('\n')},
- {id:'scope-change',label:'Scope Change Order',documentName:'Scope Change Order',category:'scope',signatureKind:'signature',buildContent:(clientName,projectName)=>[
-  'SCOPE CHANGE ORDER',
-  '',
-  'Request date: [Enter date]',
-  'Client: '+clientName,
-  'Service provider: SRCcvde',
-  'Project: '+projectName,
-  'Requested by: [Enter name]',
-  '',
-  '1. REQUESTED CHANGE',
-  '[Describe the requested change and reason.]',
-  '',
-  '2. SCOPE IMPACT',
-  '[Describe work added, removed, or revised.]',
-  '',
-  '3. COST AND SCHEDULE IMPACT',
-  '[Enter approved cost and schedule adjustments.]',
-  '',
-  '4. APPROVAL NOTES',
-  '[Add any approved conditions or project-specific terms.]'
+ {id:'additional-services',label:'Additional Services Add-on',description:'Adds new work that was not part of the original scope while keeping the original project intact.',documentName:'Additional Services Add-on',category:'scope',signatureKind:'signature',buildContent:(ctx)=>[
+  'ADDITIONAL SERVICES ADD-ON','',...commonParties(ctx),'',
+  '1. NEW SERVICES','[REQUIRED: Describe the additional services being added.]','',
+  '2. NEW DELIVERABLES','[REQUIRED: List the outputs included in this add-on.]','',
+  '3. ADDITIONAL FEES','[REQUIRED: State the added fee and payment timing.]','',
+  '4. SCHEDULE IMPACT','[REQUIRED: State added dates or whether the existing schedule changes.]','',
+  '5. RELATIONSHIP TO EXISTING AGREEMENT',
+  'This add-on supplements the existing Service Agreement. Terms not changed here remain in effect.'
+ ].join('\n')},
+ {id:'scope-change',label:'Scope Change Order',description:'Records a requested change to work already in scope, including what is added, removed, replaced, and the resulting impact.',documentName:'Scope Change Order',category:'scope',signatureKind:'signature',buildContent:(ctx)=>[
+  'SCOPE CHANGE ORDER','',...commonParties(ctx),'',
+  'Requested by: '+ctx.clientContact,'',
+  '1. REQUESTED CHANGE','[REQUIRED: Describe the requested change and business reason.]','',
+  '2. SCOPE IMPACT','[REQUIRED: Identify work being added, removed, or revised.]','',
+  '3. COST IMPACT','[REQUIRED: State added credit/cost, or state "No change."]','',
+  '4. SCHEDULE IMPACT','[REQUIRED: State the revised schedule, or state "No change."]','',
+  '5. APPROVAL',
+  'Once signed, this Change Order becomes part of the project agreement. Work affected by the change may wait for approval before proceeding.'
+ ].join('\n')},
+ {id:'launch-approval',label:'Launch Approval / Project Acceptance',description:'Client sign-off that the reviewed release is approved for launch or accepted with a documented punch list.',documentName:'Launch Approval',category:'approval',signatureKind:'signature',buildContent:(ctx)=>[
+  'LAUNCH APPROVAL / PROJECT ACCEPTANCE','',...commonParties(ctx),'',
+  '1. RELEASE BEING APPROVED','[REQUIRED: Identify the site/app/version/environment being approved.]','',
+  '2. REVIEW STATUS','[REQUIRED: Choose one: Approved for launch / Approved with punch-list items / Accepted as delivered.]','',
+  '3. OPEN ITEMS','[REQUIRED: List remaining approved punch-list items, or state "None."]','',
+  '4. LAUNCH AUTHORIZATION',
+  'The Client confirms it has reviewed the release described above and authorizes SRCcvde to launch or publish it as stated. Changes requested after this approval that are outside the agreed punch list may be treated as additional services.','',
+  '5. THIRD-PARTY AND PRODUCTION NOTICE',
+  'The Client understands that production behavior can be affected by browsers, devices, hosting providers, APIs, app stores, payment processors, and other third-party systems outside SRCcvde\'s direct control.'
+ ].join('\n')},
+ {id:'aftercare-maintenance',label:'Aftercare & Maintenance Agreement',description:'Defines post-launch support, included maintenance, response expectations, exclusions, and recurring fees.',documentName:'Aftercare & Maintenance Agreement',category:'agreement',signatureKind:'signature',buildContent:(ctx)=>[
+  'AFTERCARE & MAINTENANCE AGREEMENT','',...commonParties(ctx),'',
+  '1. COVERAGE','[REQUIRED: List included maintenance, support, monitoring, updates, and/or content work.]','',
+  '2. TERM','[REQUIRED: State start date, term, renewal behavior, and cancellation notice.]','',
+  '3. SERVICE LEVEL','[REQUIRED: State normal support hours, response targets, and emergency handling if offered.]','',
+  '4. FEES','[REQUIRED: State recurring fee, billing frequency, overage/hourly rates, and included hours if any.]','',
+  '5. EXCLUSIONS',
+  'Unless specifically included above, this agreement does not include new features, redesigns, major migrations, third-party subscription fees, recovery from client-caused changes, or work caused by unsupported third-party systems.','',
+  '6. ACCESS AND SECURITY',
+  'The Client will maintain required account ownership and provide appropriate access. SRCcvde may recommend credential, hosting, dependency, or security changes when reasonably necessary to maintain the service.','',
+  '7. END OF SERVICE',
+  'At the end of aftercare, SRCcvde will stop included maintenance on the effective end date. Outstanding balances remain due, and future work may be quoted separately.'
+ ].join('\n')},
+ {id:'termination-acknowledgment',label:'Project Termination Acknowledgment',description:'Documents an agreed project cancellation, financial closeout, deliverables, access, and what happens next.',documentName:'Project Termination Acknowledgment',category:'agreement',signatureKind:'signature',buildContent:(ctx)=>[
+  'PROJECT TERMINATION ACKNOWLEDGMENT','',...commonParties(ctx),'',
+  'Termination effective date: [REQUIRED: Enter date]','',
+  '1. TERMINATION BASIS','[REQUIRED: State whether termination is client-requested, SRCcvde-requested, or mutual and briefly explain.]','',
+  '2. FINANCIAL CLOSEOUT','[REQUIRED: State final amount due, refund/credit if any, and payment deadline.]','',
+  '3. DELIVERABLES AND SOURCE ACCESS','[REQUIRED: Identify what will be delivered or retained at closeout.]',
+  'Ownership and source access remain subject to the governing agreement and payment status.','',
+  '4. ACCOUNTS AND ACCESS','[REQUIRED: List credentials, domains, hosting, repositories, files, or third-party accounts to transfer, revoke, or leave unchanged.]','',
+  '5. SURVIVING TERMS',
+  'Payment obligations, confidentiality, intellectual-property provisions, and other terms intended by their nature to survive termination remain in effect under the governing agreement.'
+ ].join('\n')},
+ {id:'mutual-nda',label:'Mutual NDA / Confidentiality Agreement',description:'Use when either side may share non-public business or technical information before or during a project.',documentName:'Mutual Confidentiality Agreement',category:'agreement',signatureKind:'signature',buildContent:(ctx)=>[
+  'MUTUAL CONFIDENTIALITY AGREEMENT','',...commonParties(ctx),'',
+  '1. PURPOSE','The parties may share confidential information to evaluate, plan, perform, or support '+ctx.projectName+'.','',
+  '2. CONFIDENTIAL INFORMATION',
+  'Confidential Information means non-public business, financial, customer, security, product, design, source-code, credential, technical, and strategy information disclosed in any form that a reasonable person would understand to be confidential.','',
+  '3. EXCLUSIONS',
+  'Confidential Information does not include information that the receiving party can show was already lawfully known without restriction, becomes public without breach, is received lawfully from a third party, or is independently developed without use of the disclosed information.','',
+  '4. USE AND PROTECTION',
+  'Each party will use Confidential Information only for the stated purpose, protect it using reasonable care, and disclose it only to personnel or advisors who need it and are bound by confidentiality obligations.','',
+  '5. REQUIRED DISCLOSURE',
+  'A party may disclose Confidential Information when legally required, and when legally permitted will provide reasonable notice so the other party may seek protection.','',
+  '6. TERM','[REQUIRED: State confidentiality term and any special treatment for trade secrets.]','',
+  '7. NO LICENSE OR COMMITMENT',
+  'Disclosure does not transfer ownership or grant intellectual-property rights except the limited right to evaluate or perform the project. This agreement does not require either party to proceed with a transaction or project.','',
+  '8. GOVERNING TERMS','[REQUIRED: Confirm governing state and venue approved for this agreement.]'
  ].join('\n')}
 ]
 const MAX_PROJECT_FILE_BYTES=25*1024*1024
@@ -263,8 +302,8 @@ function ClientDetail({id,navigate}:{id:string;navigate:(p:string)=>void}){
  useEffect(()=>{load();const timer=window.setInterval(()=>{supabase.from('client_communications').select('*').eq('client_id',id).order('created_at',{ascending:false}).then(({data})=>{if(data)setComms(data as Communication[])})},3000);return()=>window.clearInterval(timer)},[id])
  useEffect(()=>{const preferred=projects.find(p=>!['completed','archived'].includes(p.status))?.id||projects[0]?.id||'';if(!selectedDeliveryProject&&preferred)setSelectedDeliveryProject(preferred);if(!selectedWorkProject&&preferred)setSelectedWorkProject(preferred)},[projects,selectedDeliveryProject,selectedWorkProject])
  async function invite(){setBusy(true);setMessage('');const{data,error}=await supabase.functions.invoke('invite-client',{body:{client_id:id}});setBusy(false);setMessage(error?error.message:(data?.invitation_sent?'Portal invitation sent.':'Client account linked.'));if(!error)load()}
- function applyDocumentTemplate(){const template=documentTemplates.find(t=>t.id===docTemplate),project=projects.find(p=>p.id===selectedWorkProject);if(!template)return;if(!project){setMessage('Choose a project before loading a document template.');return}setDocName(template.documentName+' — '+project.name);setDocCategory(template.category);setDocKind(template.signatureKind);setDocContent(template.buildContent(client?.name||'Client',project.name));setMessage('Template loaded. Replace every bracketed field and review the exact version before sending.')}
-  async function createDocument(e:FormEvent){e.preventDefault();const project=projects.find(p=>p.id===selectedWorkProject);if(!project)return setMessage('Choose a project first.');setBusy(true);setMessage('');const{error}=await supabase.rpc('create_signable_document',{p_client_id:id,p_project_id:project.id,p_name:docName,p_category:docCategory,p_content:docContent,p_signature_kind:docKind});setBusy(false);if(error)setMessage(error.message);else{setDocName('');setDocContent('');setMessage('Document sent to the client workspace.');await supabase.functions.invoke('dispatch-notifications');load()}}
+ function applyDocumentTemplate(){const template=documentTemplates.find(t=>t.id===docTemplate),project=projects.find(p=>p.id===selectedWorkProject);if(!template)return;if(!project){setMessage('Choose a project before loading a document template.');return}const ctx:TemplateContext={clientName:client?.name||'Client',clientContact:client?.primary_contact_name||'Client contact',clientEmail:client?.primary_email||'Email unavailable',projectName:project.name,projectType:project.project_type||'Custom technology project',projectPhase:label(project.phase),today:new Intl.DateTimeFormat(undefined,{month:'long',day:'numeric',year:'numeric'}).format(new Date())};const content=template.buildContent(ctx);setDocName(template.documentName+' — '+project.name);setDocCategory(template.category);setDocKind(template.signatureKind);setDocContent(content);const required=(content.match(/\[REQUIRED:/g)||[]).length;setMessage('Smart template loaded with live client/project details. '+required+' required field'+(required===1?'':'s')+' remain before sending.')}
+  async function createDocument(e:FormEvent){e.preventDefault();const project=projects.find(p=>p.id===selectedWorkProject);if(!project)return setMessage('Choose a project first.');const unresolved=(docContent.match(/\[REQUIRED:[^\]]*\]/g)||[]);if(unresolved.length)return setMessage('Complete all '+unresolved.length+' required template field'+(unresolved.length===1?'':'s')+' before sending. Search the document for [REQUIRED:.');setBusy(true);setMessage('');const{error}=await supabase.rpc('create_signable_document',{p_client_id:id,p_project_id:project.id,p_name:docName,p_category:docCategory,p_content:docContent,p_signature_kind:docKind});setBusy(false);if(error)setMessage(error.message);else{setDocName('');setDocContent('');setMessage('Document sent to the client workspace.');await supabase.functions.invoke('dispatch-notifications');load()}}
  async function countersign(documentId:string){const legalName=prompt('Type your legal name to countersign this exact document version.');if(!legalName)return;setBusy(true);setMessage('');setDownloadUrl('');const{error}=await supabase.rpc('countersign_document',{p_document_id:documentId,p_legal_name:legalName});if(error){setBusy(false);setMessage(error.message);return}const{data,error:finalError}=await supabase.functions.invoke('finalize-executed-document',{body:{document_id:documentId}});setBusy(false);if(finalError)setMessage('Fully executed. PDF archive needs attention: '+finalError.message);else{setMessage(data?.drive?.status==='synced'?'Fully executed and archived to Google Drive.':'Fully executed. Secure PDF generated; Google Drive sync is waiting for its one-time connection.');setDownloadUrl(data?.download_url||'')}await supabase.functions.invoke('dispatch-notifications');load()}
  async function retryArchive(documentId:string){setBusy(true);setMessage('');setDownloadUrl('');const{data,error}=await supabase.functions.invoke('finalize-executed-document',{body:{document_id:documentId}});setBusy(false);if(error)setMessage('PDF archive still needs attention: '+error.message);else{setMessage(data?.drive?.status==='synced'?'Executed PDF generated and archived to Google Drive.':'Executed PDF generated. Google Drive archive status: '+(data?.drive?.status||data?.artifact?.drive_sync_status||'pending')+'.');setDownloadUrl(data?.download_url||'')}load()}
  async function createClientAction(e:FormEvent){e.preventDefault();if(!actionTitle.trim())return;setBusy(true);setMessage('');const{data:{user}}=await supabase.auth.getUser();const{error}=await supabase.from('client_action_requests').insert({client_id:id,project_id:selectedWorkProject||null,title:actionTitle.trim(),description:actionDescription.trim()||null,action_type:actionType,status:'open',due_at:actionDue?new Date(actionDue+'T12:00:00').toISOString():null,client_visible:true,created_by:user?.id||null});setBusy(false);if(error)setMessage(error.message);else{setActionTitle('');setActionDescription('');setActionDue('');setMessage('Client action created.');await supabase.functions.invoke('dispatch-notifications');load()}}
@@ -286,7 +325,7 @@ function ClientDetail({id,navigate}:{id:string;navigate:(p:string)=>void}){
  <section className="panel"><div className="section-head"><div><p className="eyebrow">Client actions</p><h2>Action center</h2><p className="section-copy">Create clear reviews, decisions and requests that appear in the client workspace.</p></div><span className="status">{actions.filter(a=>a.status!=='completed').length} open</span></div><form className="document-form" onSubmit={createClientAction}><label>Action title<input value={actionTitle} onChange={e=>setActionTitle(e.target.value)} placeholder="Review homepage direction" required maxLength={160}/></label><div className="form-split"><label>Type<select value={actionType} onChange={e=>setActionType(e.target.value)}><option value="review">Review</option><option value="approval">Approval</option><option value="decision">Decision</option><option value="information">Information request</option></select></label><label>Due date<input type="date" value={actionDue} onChange={e=>setActionDue(e.target.value)}/></label></div><label>Details<textarea value={actionDescription} onChange={e=>setActionDescription(e.target.value)} placeholder="What does the client need to review, decide, or provide?" maxLength={2000}/></label><button className="primary" disabled={busy||!actionTitle.trim()}>Add to client action center</button></form><div className="communication-history">{actions.slice(0,8).map(a=><article className="communication-row" key={a.id}><div className="communication-meta"><span className="communication-channel">{label(a.action_type)}</span><small>{a.due_at?'Due '+date(a.due_at):'No due date'}</small></div><div><b>{a.title}</b>{a.description&&<p>{a.description}</p>}</div>{a.status!=='completed'?<button className="ghost" disabled={busy} onClick={()=>closeClientAction(a)}>Complete</button>:<StatusPill value="completed"/>}</article>)}{!actions.length&&<div className="communication-empty"><b>No client actions yet</b><p>Requests you create here will appear in the client's Action Center.</p></div>}</div></section>
  <section className="panel"><div className="section-head"><div><p className="eyebrow">Project files</p><h2>Shared workspace</h2><p className="section-copy">Deliver finished work to the client and review files they have shared with SRCcvde.</p></div><span className="status">{deliverables.length}</span></div><form className="document-form" onSubmit={uploadDeliverable}><div className="form-split"><label>Project<select value={selectedDeliveryProject} onChange={e=>setSelectedDeliveryProject(e.target.value)} required><option value="">Select project</option>{projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label><label>Display name<input value={deliveryName} onChange={e=>setDeliveryName(e.target.value)} placeholder="Homepage assets"/></label></div><div className="form-split"><label>Category<select value={deliveryCategory} onChange={e=>setDeliveryCategory(e.target.value)}><option value="deliverable">Deliverable</option><option value="branding">Branding</option><option value="content">Content</option><option value="source">Source package</option><option value="document">Document</option><option value="other">Other</option></select></label></div><label>Client notes<textarea value={deliveryDescription} onChange={e=>setDeliveryDescription(e.target.value)} placeholder="What is included or what should the client know?"/></label><label>Choose file<input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.svg,.zip,.doc,.docx,.xls,.xlsx,.csv,.txt,.md" onChange={e=>setDeliveryFile(e.target.files?.[0]||null)} required/></label><button className="primary" disabled={busy||!deliveryFile||!projects.length}>{busy?'Uploading…':'Deliver to client'}</button></form><div className="directory-tools"><label>Search files<input value={fileQuery} onChange={e=>setFileQuery(e.target.value)} placeholder="Name, category, notes…"/></label><label>Show<select value={fileView} onChange={e=>setFileView(e.target.value)}><option value="all">All shared files</option><option value="client">Client uploads</option><option value="srccvde">SRCcvde deliveries</option></select></label><span className="directory-count">{visibleDeliverables.length} files</span></div><div className="communication-history">{visibleDeliverables.slice(0,24).map(item=><article className="communication-row" key={item.id}><div className="communication-meta"><span className="communication-channel">{item.source==='client'?'Client upload':'SRCcvde delivery'}</span><small>{label(item.category||'deliverable')} · v{item.version||1} · {date(item.created_at)}</small></div><div><b>{item.name}</b><p>{item.file_name}{item.description?' · '+item.description:''}</p></div><div className="detail-actions"><button className="ghost" onClick={()=>openDeliverable(item)}>Open</button>{item.source==='srccvde'&&<button className="ghost" disabled={busy} onClick={()=>replaceDeliverable(item)}>New version</button>}<button className="ghost" disabled={busy} onClick={()=>toggleDeliverableVisibility(item)}>{item.client_visible?'Hide':'Show'}</button><button className="ghost" disabled={busy} onClick={()=>deleteDeliverable(item)}>Delete</button></div></article>)}{!visibleDeliverables.length&&<div className="communication-empty"><b>No files in this view</b><p>Client uploads and SRCcvde deliverables will appear here together.</p></div>}</div></section>
  <section className="panel communications-panel"><div className="section-head"><div><p className="eyebrow">Communications</p><h2>Client history</h2><p className="section-copy">Keep a clean internal record of calls, emails, meetings and client updates.</p></div><span className="status">{comms.length}</span></div><form className="communication-form" onSubmit={logCommunication}><div className="communication-form-head"><div><b>{commChannel==='email'?'Send client email':'Log an interaction'}</b><small>{commChannel==='email'?'Sends from hello@srccvde.com and records the message in client history.':'Phone, meeting, text and portal entries are recorded in SRCcvde; they are not sent externally.'}</small></div></div><div className="communication-fields"><label>Channel<select value={commChannel} onChange={e=>setCommChannel(e.target.value)}><option value="email">Email</option><option value="portal">Portal</option><option value="phone">Phone</option><option value="meeting">Meeting</option><option value="text">Text</option></select></label><label>Subject<input value={commSubject} onChange={e=>setCommSubject(e.target.value)} placeholder="e.g. Project kickoff" maxLength={160} required={commChannel==='email'}/></label></div><label>{commChannel==='email'?'Message':'Notes'}<textarea value={commBody} onChange={e=>setCommBody(e.target.value)} placeholder={commChannel==='email'?'Write the email to '+client.primary_contact_name+'…':'What was discussed, decided, or promised?'} required maxLength={5000}/></label><div className="communication-form-footer"><small>{commBody.length}/5000{commChannel==='email'?' · To '+client.primary_email:''}</small><button className="primary inline" disabled={busy||!commBody.trim()||(commChannel==='email'&&!commSubject.trim())}>{busy?(commChannel==='email'?'Sending…':'Saving…'):(commChannel==='email'?'Send email':'Log interaction')}</button></div></form><div className="communication-history">{comms.length?comms.slice(0,8).map(c=><article className="communication-row" key={c.id}><div className="communication-meta"><span className="communication-channel">{label(c.channel)}</span><small>{date(c.created_at)} · {label(c.direction)}{c.channel==='email'&&c.delivery_status?' · '+label(c.delivery_status):''}</small></div><div><b>{c.subject||'Client interaction'}</b><p>{c.body}</p></div></article>):<div className="communication-empty"><b>No communication history yet</b><p>Your logged calls, emails, meetings and updates will appear here.</p></div>}</div></section>
- <section className="panel"><p className="eyebrow">Create document</p><h2>Send an exact version for review</h2><form className="document-form" onSubmit={createDocument}><div className="form-split"><label>Starting template<select value={docTemplate} onChange={e=>setDocTemplate(e.target.value)}>{documentTemplates.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}</select></label><button className="ghost inline" type="button" disabled={busy||!projects.length} onClick={applyDocumentTemplate}>Load template</button></div><p className="muted">Templates are editable starting points. Replace every bracketed field and add approved terms before sending; the client reviews and signs the exact version shown below.</p><label>Document name<input value={docName} onChange={e=>setDocName(e.target.value)} placeholder="Project Agreement" required/></label><div className="form-split"><label>Category<select value={docCategory} onChange={e=>setDocCategory(e.target.value)}><option value="agreement">Agreement</option><option value="proposal">Proposal</option><option value="scope">Scope</option><option value="approval">Approval</option></select></label><label>Action<select value={docKind} onChange={e=>setDocKind(e.target.value)}><option value="signature">Signature required</option><option value="acknowledgment">Acknowledgment required</option></select></label></div><label>Exact document content<textarea className="document-editor" value={docContent} onChange={e=>setDocContent(e.target.value)} placeholder="Choose a template or compose the exact version the client will review…" required minLength={20}/></label><button className="primary" disabled={busy}>Send to client workspace</button></form></section></section><aside><ActivityFeed rows={activity}/></aside></div></>
+ <section className="panel"><p className="eyebrow">Create document</p><h2>Send an exact version for review</h2><form className="document-form" onSubmit={createDocument}><div className="form-split"><label>Starting template<select value={docTemplate} onChange={e=>setDocTemplate(e.target.value)}>{documentTemplates.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}</select></label><button className="ghost inline" type="button" disabled={busy||!projects.length} onClick={applyDocumentTemplate}>Load template</button></div><p className="muted"><b>{documentTemplates.find(t=>t.id===docTemplate)?.description}</b> Smart templates prefill known client and project details. Complete every <code>[REQUIRED: ...]</code> field before sending; SRCcvde will block incomplete templates.</p><label>Document name<input value={docName} onChange={e=>setDocName(e.target.value)} placeholder="Project Agreement" required/></label><div className="form-split"><label>Category<select value={docCategory} onChange={e=>setDocCategory(e.target.value)}><option value="agreement">Agreement</option><option value="proposal">Proposal</option><option value="scope">Scope</option><option value="approval">Approval</option></select></label><label>Action<select value={docKind} onChange={e=>setDocKind(e.target.value)}><option value="signature">Signature required</option><option value="acknowledgment">Acknowledgment required</option></select></label></div><label>Exact document content<textarea className="document-editor" value={docContent} onChange={e=>setDocContent(e.target.value)} placeholder="Choose a template or compose the exact version the client will review…" required minLength={20}/></label><button className="primary" disabled={busy}>Send to client workspace</button></form></section></section><aside><ActivityFeed rows={activity}/></aside></div></>
 }
 
 function ProjectsPage(){
