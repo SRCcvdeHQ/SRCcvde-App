@@ -692,3 +692,80 @@ body{min-width:0}
  .template-library-grid{grid-template-columns:minmax(0,1fr)}
  .template-library-card{width:100%}
 }
+
+
+/* Billing responsive hardening */
+.billing-page,.billing-page>*,
+.billing-history-panel,.billing-payments-panel,.billing-payment-panel,
+.invoice-list,.payment-list,.invoice-card,.payment-card,
+.invoice-builder-items,.invoice-builder-row,.invoice-preview,.paypal-checkout{min-width:0;max-width:100%}
+.invoice-card>*,.payment-card>*,.invoice-builder-row>*{min-width:0;max-width:100%}
+.invoice-main,.invoice-title-line,.invoice-amount,.invoice-balance,.invoice-card-actions,
+.payment-copy,.payment-actions,.project-balance-head>div,.pay-option>div{min-width:0}
+.invoice-main p,.payment-copy small,.pay-option strong,.pay-option p,.project-balance-head b,.project-balance-head small{overflow-wrap:anywhere}
+.paypal-checkout{min-width:0;width:100%}
+.paypal-checkout>div,.paypal-checkout paypal-button{min-width:0;max-width:100%;width:100%}
+
+/* iOS Safari/PWA native date controls */
+.billing-page label:has(input[type="date"]),
+.billing-payment-panel label:has(input[type="date"]){min-width:0;max-width:100%;overflow:hidden}
+.billing-page input[type="date"],
+.billing-payment-panel input[type="date"]{
+ display:block;
+ box-sizing:border-box;
+ inline-size:100%;
+ width:100%;
+ min-inline-size:0;
+ min-width:0;
+ max-inline-size:100%;
+ max-width:100%;
+ -webkit-appearance:none;
+ appearance:none;
+ overflow:hidden;
+}
+.billing-page input[type="date"]::-webkit-date-and-time-value,
+.billing-payment-panel input[type="date"]::-webkit-date-and-time-value{min-width:0;width:100%;text-align:left}
+
+@media(max-width:900px){
+ .billing-overview-grid{grid-template-columns:minmax(0,1fr)}
+ .invoice-builder-row{grid-template-columns:minmax(0,1fr) minmax(72px,.35fr) minmax(110px,.65fr)}
+ .invoice-builder-row label:first-child{grid-column:1/-1}
+ .invoice-builder-row .ghost{grid-column:1/-1;width:100%}
+}
+
+@media(max-width:700px){
+ .billing-page .panel{padding-left:16px;padding-right:16px}
+ .billing-hero{grid-template-columns:minmax(0,1fr);padding:20px}
+ .billing-hero-status{position:static;align-items:flex-start}
+ .billing-hero-copy{padding-right:0}
+ .billing-section-head,.project-balance-head{flex-direction:column;align-items:flex-start}
+ .project-balance-head>div:last-child{text-align:left;align-items:flex-start}
+ .invoice-builder-row{grid-template-columns:minmax(0,1fr)}
+ .invoice-builder-row label,.invoice-builder-row label:first-child,.invoice-builder-row .ghost{grid-column:1}
+ .invoice-preview-lines>div,.invoice-preview-total{align-items:flex-start;flex-direction:column;gap:6px}
+ .invoice-card{grid-template-columns:minmax(0,1fr)}
+ .invoice-main,.invoice-amount,.invoice-balance,.invoice-card-actions{grid-column:1}
+ .invoice-balance{grid-template-columns:repeat(2,minmax(0,1fr));min-width:0;max-width:none;width:100%}
+ .invoice-card-actions{flex-direction:column;align-items:stretch}
+ .invoice-card-actions .ghost,.invoice-card-actions .paypal-checkout{width:100%;max-width:100%}
+ .payment-card{grid-template-columns:34px minmax(0,1fr)}
+ .payment-card>strong,.payment-actions{grid-column:2}
+ .payment-actions{justify-content:flex-start;flex-wrap:wrap}
+ .payment-actions .ghost{width:100%}
+}
+
+@media(max-width:480px){
+ .billing-page{gap:12px}
+ .billing-page .panel{padding-left:14px;padding-right:14px}
+ .billing-hero{padding:18px}
+ .billing-hero-copy h2{font-size:24px}
+ .billing-hero-status span{font-size:24px}
+ .billing-progress>div:first-child{font-size:10px}
+ .invoice-title-line{align-items:flex-start;flex-direction:column}
+ .invoice-balance{grid-template-columns:minmax(0,1fr)}
+ .invoice-due{grid-column:1}
+ .payment-card{grid-template-columns:minmax(0,1fr)}
+ .payment-mark,.payment-card>strong,.payment-actions{grid-column:1}
+ .payment-actions{align-items:stretch}
+ .payment-actions .pill,.payment-actions .ghost{width:100%}
+}
