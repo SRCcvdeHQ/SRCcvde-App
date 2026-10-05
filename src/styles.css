@@ -910,3 +910,45 @@ body{min-width:0}
  .communication-meta{min-width:0}
  .document-editor{min-height:240px}
 }
+
+
+/* Activity + Messages responsive hardening */
+.activity-tools,.activity-panel,.activity-item,.activity-item>div,
+.message-project-picker,.message-project-picker label,
+.communications-panel,.communication-history,.communication-row,.communication-meta,
+.communication-form,.communication-form label,.communication-form-footer{min-width:0;max-width:100%}
+
+.activity-item b,.activity-item small,
+.communication-row b,.communication-row p,.communication-row small,
+.communication-meta,.communication-channel,
+.message-project-picker label,.message-project-picker select{overflow-wrap:anywhere}
+
+.activity-item>div{flex:1 1 auto}
+.communication-channel{max-width:100%;white-space:normal}
+.message-project-picker select{width:100%;min-width:0;max-width:100%}
+.communications-panel .communication-history{width:100%;max-width:100%}
+.communications-panel .communication-row>div{min-width:0;max-width:100%}
+.communications-panel .communication-form textarea{min-width:0;max-width:100%;box-sizing:border-box}
+
+@media(max-width:700px){
+ .activity-tools .directory-tools{grid-template-columns:minmax(0,1fr)}
+ .activity-tools .directory-count{grid-column:1;width:100%;height:auto;padding-top:2px}
+ .message-project-picker{padding:15px}
+ .message-project-picker label{grid-template-columns:minmax(0,1fr);gap:8px}
+ .communications-panel .communication-row{grid-template-columns:minmax(0,1fr);gap:9px}
+ .communications-panel .communication-form{padding:14px}
+ .communications-panel .communication-form-footer{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+ .communications-panel .communication-form-footer .primary{width:100%;max-width:100%}
+}
+
+@media(max-width:480px){
+ .activity-item{align-items:flex-start;gap:10px;padding:13px 0}
+ .activity-item i{margin-top:4px}
+ .activity-item b{font-size:12px;line-height:1.45}
+ .activity-item small{line-height:1.45}
+ .message-project-picker{padding:14px}
+ .communications-panel{padding-left:14px;padding-right:14px}
+ .communications-panel .communication-form{margin-left:0;margin-right:0}
+ .communications-panel .communication-row p{line-height:1.6}
+ .communication-channel{font-size:.64rem}
+}
