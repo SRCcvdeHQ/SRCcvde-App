@@ -769,3 +769,15 @@ body{min-width:0}
  .payment-actions{align-items:stretch}
  .payment-actions .pill,.payment-actions .ghost{width:100%}
 }
+
+
+/* Admin billing mobile polish */
+.admin-billing-page .form-split,
+.admin-billing-page .document-form,
+.admin-billing-page .document-form label{min-width:0;max-width:100%}
+@media(max-width:700px){
+ .admin-billing-page .form-split{grid-template-columns:minmax(0,1fr)}
+ .admin-billing-page .form-split>label{grid-column:1;width:100%}
+ .admin-billing-page .ghost,.admin-billing-page .primary{max-width:100%}
+ .admin-billing-page .invoice-preview{padding:18px}
+}
