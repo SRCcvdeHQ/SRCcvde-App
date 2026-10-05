@@ -994,3 +994,18 @@ body{min-width:0}
  .workspace{padding-left:max(14px,env(safe-area-inset-left));padding-right:max(14px,env(safe-area-inset-right));padding-bottom:calc(30px + env(safe-area-inset-bottom))}
  .mobile-bar{padding-left:max(14px,env(safe-area-inset-left));padding-right:max(14px,env(safe-area-inset-right))}
 }
+
+
+/* Multi-device notification management */
+.notification-devices{min-width:0}
+.notification-device-list{display:grid;gap:0;border-top:1px solid var(--line)}
+.notification-device{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:16px 0;border-bottom:1px solid var(--line);min-width:0}
+.notification-device>div:first-child{display:grid;gap:4px;min-width:0}
+.notification-device b,.notification-device small{overflow-wrap:anywhere}
+.notification-device small{color:var(--muted)}
+.notification-device .detail-actions{flex:0 0 auto}
+@media(max-width:600px){
+ .notification-device{align-items:flex-start;flex-direction:column}
+ .notification-device .detail-actions{width:100%}
+ .notification-device .detail-actions .ghost{width:100%;max-width:100%}
+}
