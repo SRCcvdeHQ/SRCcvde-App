@@ -827,3 +827,86 @@ body{min-width:0}
  .signature-icon{flex:0 0 36px}
  .drive-connect .section-head>span{max-width:100%}
 }
+
+
+/* Clients workspace responsive hardening */
+.client-directory,.client-list,.client-row,.detail-grid,.detail-head,.identity,.detail-actions,
+.communication-history,.communication-row,.communication-form,.communication-form-head,
+.communication-fields,.communication-form-footer,.document-form,.admin-project-context,
+.template-library,.template-wizard{min-width:0;max-width:100%}
+.client-row>*,.detail-grid>*,.identity>*,.communication-row>*,
+.communication-fields>*,.communication-form-footer>*,
+.document-form>*,.admin-project-context>*{min-width:0;max-width:100%}
+
+.client-row b,.client-row small,.identity h1,.identity p,
+.communication-row b,.communication-row p,.communication-row small,
+.communication-form-head b,.communication-form-head small,
+.communication-form-footer small,.admin-project-context p,
+.document-form label,.template-library-card small{overflow-wrap:anywhere}
+
+.client-row .pill{max-width:100%}
+.communication-row .detail-actions{min-width:0}
+.communication-form-footer{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.communication-form-footer small{min-width:0;flex:1 1 240px}
+.communication-form-footer .primary{flex:0 0 auto}
+.document-form input[type="file"]{width:100%;min-width:0;max-width:100%}
+
+/* iOS Safari/PWA action due date containment */
+.document-form label:has(input[type="date"]){min-width:0;max-width:100%;overflow:hidden}
+.document-form input[type="date"]{
+ display:block;
+ box-sizing:border-box;
+ inline-size:100%;
+ width:100%;
+ min-inline-size:0;
+ min-width:0;
+ max-inline-size:100%;
+ max-width:100%;
+ -webkit-appearance:none;
+ appearance:none;
+ overflow:hidden;
+}
+.document-form input[type="date"]::-webkit-date-and-time-value{min-width:0;width:100%;text-align:left}
+
+@media(max-width:800px){
+ .detail-grid{grid-template-columns:minmax(0,1fr)}
+ .admin-project-context{grid-template-columns:minmax(0,1fr)}
+ .communication-fields{grid-template-columns:minmax(0,1fr)}
+ .form-split{grid-template-columns:minmax(0,1fr)}
+}
+
+@media(max-width:700px){
+ .client-directory .directory-tools{grid-template-columns:minmax(0,1fr)}
+ .client-row{grid-template-columns:38px minmax(0,1fr) auto;gap:12px}
+ .client-row>span:last-child{display:none}
+ .client-row .pill{justify-self:end}
+ .detail-head{align-items:flex-start;flex-direction:column;gap:16px}
+ .identity{width:100%;align-items:flex-start}
+ .identity>div:last-child{min-width:0}
+ .detail-actions{display:grid;grid-template-columns:minmax(0,1fr);width:100%}
+ .detail-actions>*{width:100%;max-width:100%}
+ .record-grid{grid-template-columns:minmax(0,1fr)}
+ .project-row{grid-template-columns:minmax(0,1fr)}
+ .project-row .progress,.project-row strong,.project-row .pill{grid-column:1}
+ .project-row .pill{justify-self:start}
+ .doc-row.signable-row{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+ .signable-row .ghost,.signable-row .pill{width:100%;max-width:100%}
+ .communication-row{grid-template-columns:minmax(0,1fr)}
+ .communication-row .detail-actions{display:grid;grid-template-columns:minmax(0,1fr);width:100%}
+ .communication-row .detail-actions .ghost{width:100%;max-width:100%}
+ .communication-form-footer{display:grid;grid-template-columns:minmax(0,1fr)}
+ .communication-form-footer .primary{width:100%;max-width:100%}
+ .document-form .primary{width:100%;max-width:100%}
+ .template-library,.template-wizard{width:100%;max-width:100%}
+}
+
+@media(max-width:480px){
+ .client-row{grid-template-columns:38px minmax(0,1fr)}
+ .client-row .pill{grid-column:2;justify-self:start;margin-top:4px}
+ .identity{gap:12px}
+ .identity .avatar{width:46px;height:46px}
+ .record-grid article{padding:16px}
+ .communication-row{gap:10px;padding:13px 0}
+ .communication-meta{min-width:0}
+ .document-editor{min-height:240px}
+}
