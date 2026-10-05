@@ -602,3 +602,14 @@ body{min-width:0}
  .detail-actions>*{width:100%;max-width:100%}
  .invoice-balance{grid-template-columns:minmax(0,1fr)}
 }
+
+
+/* Projects — mobile field containment */
+.project-control-grid,.admin-milestone,.milestone-create,.timeline-card,.panel{min-width:0;max-width:100%}
+.project-control-grid>*,.admin-milestone>*,.milestone-create>*,.timeline-card>*,.panel>*{min-width:0;max-width:100%}
+.project-control-grid label,.admin-milestone label,.milestone-create label{min-width:0;width:100%;max-width:100%}
+.project-control-grid :is(input,select,textarea),.admin-milestone :is(input,select,textarea),.milestone-create :is(input,select,textarea){width:100%;min-width:0;max-width:100%}
+@media(max-width:700px){
+ .project-control-grid,.admin-milestone,.milestone-create{grid-template-columns:minmax(0,1fr)!important;width:100%;max-width:100%}
+ .project-control-grid :is(.primary,.secondary,.ghost),.admin-milestone :is(.primary,.secondary,.ghost),.milestone-create :is(.primary,.secondary,.ghost){width:100%;max-width:100%}
+}
