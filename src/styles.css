@@ -642,3 +642,21 @@ body{min-width:0}
  .admin-milestone label:has(input[type="date"]){width:100%;min-width:0;max-width:100%}
  .admin-milestone input[type="date"]{inline-size:100%!important;width:100%!important;min-width:0!important;max-width:100%!important}
 }
+
+
+/* Guided document template wizard */
+.template-wizard{margin:18px 0 22px;padding:20px;border:1px solid rgba(200,184,154,.22);border-radius:14px;background:linear-gradient(135deg,rgba(200,184,154,.055),rgba(23,62,46,.11))}
+.template-wizard-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px}
+.template-wizard-head h3{margin:0;font:600 22px/1.15 var(--font-display),"Plus Jakarta Sans",sans-serif;letter-spacing:-.03em}
+.template-wizard-fields{display:grid;gap:14px}
+.template-wizard-fields label{display:grid;gap:9px;margin:0}
+.template-wizard-fields label>span{display:flex;align-items:flex-start;gap:10px;color:#d9ddd9;font-size:12px;line-height:1.45}
+.template-wizard-fields label>span b{display:grid;place-items:center;flex:0 0 28px;height:28px;border:1px solid var(--line);border-radius:8px;color:var(--tan);font-size:10px}
+.template-wizard-fields textarea{min-height:92px}
+.template-wizard-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
+@media(max-width:600px){
+ .template-wizard{padding:16px}
+ .template-wizard-head{flex-direction:column}
+ .template-wizard-actions{display:grid;grid-template-columns:1fr}
+ .template-wizard-actions .ghost,.template-wizard-actions .primary{width:100%;max-width:100%}
+}
