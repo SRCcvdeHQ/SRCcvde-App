@@ -952,3 +952,31 @@ body{min-width:0}
  .communications-panel .communication-row p{line-height:1.6}
  .communication-channel{font-size:.64rem}
 }
+
+
+/* Notifications responsive hardening */
+.notification-preferences,.preference-row,.preference-row>span,
+.notification-ops,.notification-health-grid,.notification-health-grid article{min-width:0;max-width:100%}
+.preference-row b,.preference-row small,.notification-ops p,
+.notification-health-grid small,.notification-health-grid strong{overflow-wrap:anywhere}
+.preference-row{cursor:pointer}
+.preference-row input{width:22px;height:22px;min-width:22px;min-height:22px;flex:0 0 22px}
+.notification-ops .secondary{max-width:100%}
+
+@media(max-width:700px){
+ .notification-health-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .notification-ops .section-head{align-items:flex-start;flex-direction:column}
+ .notification-ops .attention-health{align-self:flex-start}
+}
+
+@media(max-width:520px){
+ .preference-row{align-items:flex-start;gap:14px;padding:16px 0}
+ .preference-row>span{padding-right:4px}
+ .preference-row input{margin-top:1px}
+ .notification-health-grid{grid-template-columns:minmax(0,1fr)}
+ .notification-health-grid article{padding:13px}
+ .notification-ops .secondary{width:100%}
+ .page-title+section.panel .detail-actions{display:grid;grid-template-columns:minmax(0,1fr);width:100%}
+ .page-title+section.panel .detail-actions .primary,
+ .page-title+section.panel .detail-actions .secondary{width:100%;max-width:100%}
+}
