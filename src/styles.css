@@ -542,3 +542,63 @@ body :is(.eyebrow,.live-dot,.status,.fine,.form-message,.pipeline-head,.lead-car
  .project-row .progress{grid-column:1}
  .milestone-create>div{grid-column:auto}
 }
+
+
+/* Responsive hardening — final layout safety net */
+html,body,#root{max-width:100%;overflow-x:clip}
+body{min-width:0}
+.app-shell,.workspace,.workspace>*{min-width:0;max-width:100%}
+.workspace :is(section,article,header,footer,div,form,nav,aside){min-width:0}
+.workspace :is(img,svg,canvas,video,iframe,table){max-width:100%}
+.workspace :is(input,select,textarea,button){min-width:0}
+
+.topbar,.section-head,.detail-head,.detail-actions,.connected-drive,.document-sheet-head,
+.billing-section-head,.project-balance-head,.invoice-title-line,.auth-form-meta{min-width:0;flex-wrap:wrap}
+
+.lead-row,.client-row,.project-row,.doc-row,.signature-card,.vault-row,.invoice-card,
+.invoice-row,.admin-milestone,.communication-row,.directory-tools,.invoice-builder-row,
+.message-project-picker label,.admin-project-context{min-width:0;max-width:100%}
+
+.lead-row>*,.client-row>*,.project-row>*,.doc-row>*,.signature-card>*,
+.invoice-card>*,.invoice-row>*,.admin-milestone>*,.communication-row>*,
+.directory-tools>*,.invoice-builder-row>*,.admin-project-context>*{min-width:0}
+
+.workspace :is(.panel,.timeline-card,.attention,.billing-hero,.review-v2,.review-v2-action,
+.document-paper,.secure-review-card,.auth-card){max-width:100%}
+
+.workspace :is(.muted,.brief p,.note p,.communication-row,.message-bubble,.invoice-main,
+.invoice-title-line,.project-balance-head,.directory-tools,.page-title p){overflow-wrap:anywhere}
+
+@media(max-width:900px){
+ html,body,#root{width:100%;max-width:100%;overflow-x:clip}
+ .app-shell{display:block;width:100%;min-height:100dvh;overflow:visible}
+ .workspace{width:100%;max-width:100%;min-height:calc(100dvh - 64px);margin:0;overflow:visible}
+ .sidebar{max-width:min(84vw,320px)}
+ .topbar,.page-title,.section-head,.detail-head{max-width:100%}
+}
+
+@media(max-width:700px){
+ .lead-row{grid-template-columns:38px minmax(0,1fr) auto}
+ .lead-row>span{display:none}
+ .client-row{grid-template-columns:38px minmax(0,1fr) auto}
+ .client-row>span:last-child{display:none}
+ .project-row,.invoice-row,.invoice-card,.admin-milestone,.communication-row,
+ .directory-tools,.invoice-builder-row,.admin-project-context{grid-template-columns:minmax(0,1fr)}
+ .project-row .progress,.invoice-main,.invoice-amount,.invoice-balance,.invoice-card-actions,
+ .invoice-builder-row label:first-child,.invoice-builder-row .ghost{grid-column:1}
+ .invoice-balance{min-width:0;max-width:none}
+ .message-project-picker label{grid-template-columns:minmax(0,1fr)}
+ .message-project-picker select{width:100%}
+ .document-sheet-head,.connected-drive,.billing-section-head,.project-balance-head,
+ .invoice-title-line{align-items:flex-start}
+}
+
+@media(max-width:480px){
+ .workspace{padding-left:12px;padding-right:12px}
+ .panel,.timeline-card,.attention,.billing-hero,.review-v2-action{padding-left:16px;padding-right:16px}
+ .auth-panel{padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right))}
+ .auth-card{padding-left:18px;padding-right:18px}
+ .page-title h1,.topbar h1{overflow-wrap:anywhere}
+ .detail-actions>*{width:100%;max-width:100%}
+ .invoice-balance{grid-template-columns:minmax(0,1fr)}
+}
