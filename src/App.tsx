@@ -661,7 +661,8 @@ export default function App(){
  const workspaceRef=useRef<HTMLElement|null>(null)
  useEffect(()=>{const section=route==='/'?'Overview':label(route.split('/').filter(Boolean)[0]||'Overview');document.title=section+' — SRCcvde Workspace'},[route])
  useEffect(()=>{if(!active)return;requestAnimationFrame(()=>workspaceRef.current?.focus({preventScroll:true}))},[route,active])
- const navigate=(p:string)=>{history.pushState({},'',p);setRoute(path());setMobileNav(false);window.scrollTo({top:0,left:0,behavior:'auto'})}
+ useEffect(()=>{if(!active)return;const key='srccvde:last-route:'+active.role;if(route==='/'){const saved=localStorage.getItem(key);if(saved&&saved!=='/'){history.replaceState({},'',saved);setRoute(path());return}}else if(route!=='/set-password'){localStorage.setItem(key,route)}},[route,active])
+ const navigate=(p:string)=>{history.pushState({},'',p);if(active&&p!=='/')localStorage.setItem('srccvde:last-route:'+active.role,p);setRoute(path());setMobileNav(false);window.scrollTo({top:0,left:0,behavior:'auto'})}
  if(loading)return <main className="loading"><Brand/><span>Opening workspace…</span></main>
  if(route==='/set-password'&&(!passwordFlow||!session))return <main className="pending"><Brand/><p className="eyebrow">Secure password setup</p><h1>{authLinkError?'This password link could not be opened.':"This password link isn't active."}</h1><p>{authLinkError?'The link may have expired or already been used. Request a fresh password email and try again.':'For your protection, a password can only be changed from the recovery or invitation link sent to that account.'}</p><button className="primary" onClick={async()=>{await supabase.auth.signOut();history.replaceState({},'','/');location.reload()}}>Return to sign in</button></main>
  if(!session)return <Login/>
