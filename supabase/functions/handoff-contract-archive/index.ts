@@ -27,7 +27,8 @@ Deno.serve(async(req:Request)=>{
       admin.from("client_memberships").select("client_id").eq("user_id",user.id).eq("client_id",clientId).maybeSingle()
     ]);
     const staff=Boolean(membership&&membership.status==="active"&&["owner","admin","staff"].includes(membership.role));
-    if(!staff&&!clientMembership)return json({error:"Not authorized for this client"},403,origin);
+    const activeClient=Boolean(clientMembership&&membership&&membership.status==="active"&&membership.role==="client");
+    if(!staff&&!activeClient)return json({error:"Not authorized for this client"},403,origin);
 
     const[{data:client,error:clientError},{data:handoff}]=await Promise.all([
       admin.from("clients").select("id,name").eq("id",clientId).single(),
