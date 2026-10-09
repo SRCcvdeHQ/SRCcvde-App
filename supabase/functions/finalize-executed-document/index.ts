@@ -86,7 +86,15 @@ async function uploadDrivePdf(token:string,parent:string,name:string,bytes:Uint8
  if(!r.ok)throw new Error("Google Drive upload: "+await r.text());return r.json();
 }
 async function syncDrive(admin:any,artifact:any,client:any,doc:any,executedBytes:Uint8Array,originalBytes?:Uint8Array){
- const token=await googleAccessToken(admin);if(!token)return {status:"not_configured"};
+ let token:string|null=null;
+ try{
+  token=await googleAccessToken(admin);
+ }catch(e){
+  const msg=e instanceof Error?e.message:String(e);
+  await admin.from("executed_document_artifacts").update({drive_sync_status:"failed",drive_error:msg.slice(0,2000)}).eq("id",artifact.id);
+  return {status:"failed",error:msg};
+ }
+ if(!token)return {status:"not_configured"};
  const {data:integration}=await admin.from("app_integrations").select("root_folder_id,status").eq("provider","google_drive").maybeSingle();
  if(!integration?.root_folder_id||integration.status!=="connected")return {status:"not_configured"};
  const ROOT_DRIVE_FOLDER=integration.root_folder_id;
