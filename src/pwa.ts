@@ -1,15 +1,6 @@
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     try {
-      let reloading = false
-      const reloadOnce = () => {
-        if (reloading) return
-        reloading = true
-        window.location.reload()
-      }
-
-      navigator.serviceWorker.addEventListener('controllerchange', reloadOnce)
-
       const registration = await navigator.serviceWorker.register('/sw.js')
       const checkForUpdate = () => registration.update().catch(() => undefined)
       const checkForNewBuild = async () => {
@@ -20,7 +11,7 @@ if ('serviceWorker' in navigator) {
           if (!response.ok) return
           const html = await response.text()
           const next = new DOMParser().parseFromString(html, 'text/html').querySelector<HTMLScriptElement>('script[type="module"][src]')?.getAttribute('src')
-          if (next && next !== current) reloadOnce()
+          if (next && next !== current) window.dispatchEvent(new CustomEvent('srccvde:update-available'))
         } catch {
           // Update checks are best-effort; offline state is handled by the workspace shell.
         }
