@@ -1,6 +1,6 @@
 # Architecture
 
-`srccvde.com` serves prerendered marketing pages and a Cloudflare Pages intake gateway. `app.srccvde.com` serves an authenticated SPA with lazy feature modules. Both use the shared Supabase backend. Public publishable keys identify the project; authorization comes from validated user JWTs, memberships, RLS, and service-side checks.
+`srccvde.com` serves prerendered marketing pages and a Cloudflare Pages intake gateway. `app.srccvde.com` serves an authenticated SPA with lazy feature modules. Both use the shared Supabase backend. The workspace uses Pages’ native SPA fallback (no top-level 404.html); public pages retain a real 404. Public publishable keys identify the project; authorization comes from validated user JWTs, memberships, RLS, and service-side checks.
 
 ## Access boundary
 
