@@ -1,36 +1,29 @@
-name: Deploy SRCcvde App
+name: Deploy Cloudflare Pages
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
-  pages: write
-  id-token: write
 concurrency:
-  group: srccvde-app-pages
-  cancel-in-progress: true
+  group: cloudflare-production
+  cancel-in-progress: false
 jobs:
   deploy:
-    environment:
-      name: github-pages
+    if: github.ref == 'refs/heads/main'
+    environment: cloudflare-production
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install
-      - name: Build
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
         env:
           VITE_SUPABASE_URL: https://pszxarjungpoqvbwoblf.supabase.co
           VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_cedTLNmaS7EyedW--HEQzw_tpDXQAsp
-        run: npm run build
-      - uses: actions/configure-pages@v5
-        with:
-          enablement: true
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - run: npx --no-install wrangler pages deploy dist --project-name=srccvde-workspace --branch=main
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}

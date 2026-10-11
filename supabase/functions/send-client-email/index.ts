@@ -1,5 +1,6 @@
+import { enforceActiveAccess } from "../_shared/active-access.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.117.3";
 
 const allowedOrigins = new Set([
   "https://app.srccvde.com",
@@ -47,6 +48,8 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders(req) });
   }
+  const accessDenied = await enforceActiveAccess(req);
+  if (accessDenied) return accessDenied;
 
   if (req.method !== "POST") {
     return json(req, { error: "Method not allowed" }, 405);
@@ -137,8 +140,7 @@ Deno.serve(async (req: Request) => {
       return json(req, { error: "Client email is unavailable" }, 404);
     }
 
-    const contactName =
-      client.primary_contact_name || client.name || "there";
+    const contactName = client.primary_contact_name || client.name || "there";
 
     const html = `
       <div style="font-family:Arial,sans-serif;max-width:640px;margin:auto;color:#111;">
@@ -162,31 +164,25 @@ Deno.serve(async (req: Request) => {
       </div>
     `;
 
-    const textBody =
-      `Hi ${contactName},\n\n${message}\n\n— SRCcvde`;
+    const textBody = `Hi ${contactName},\n\n${message}\n\n— SRCcvde`;
 
-    const resendResponse = await fetch(
-      "https://api.resend.com/emails",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${resendKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from: "SRCcvde <hello@srccvde.com>",
-          to: [client.primary_email],
-          reply_to: "hello@srccvde.com",
-          subject,
-          html,
-          text: textBody,
-        }),
+    const resendResponse = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${resendKey}`,
+        "Content-Type": "application/json",
       },
-    );
+      body: JSON.stringify({
+        from: "SRCcvde <hello@srccvde.com>",
+        to: [client.primary_email],
+        reply_to: "hello@srccvde.com",
+        subject,
+        html,
+        text: textBody,
+      }),
+    });
 
-    const resendResult = await resendResponse
-      .json()
-      .catch(() => ({}));
+    const resendResult = await resendResponse.json().catch(() => ({}));
 
     if (!resendResponse.ok) {
       console.error("Resend error", resendResult);
@@ -194,9 +190,7 @@ Deno.serve(async (req: Request) => {
       return json(
         req,
         {
-          error:
-            resendResult?.message ||
-            "Email delivery failed",
+          error: resendResult?.message || "Email delivery failed",
         },
         502,
       );
@@ -249,10 +243,7 @@ Deno.serve(async (req: Request) => {
     return json(
       req,
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unexpected error",
+        error: error instanceof Error ? error.message : "Unexpected error",
       },
       500,
     );

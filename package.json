@@ -1,1 +1,39 @@
-{"name":"srccvde-app","private":true,"version":"0.1.0","type":"module","scripts":{"dev":"vite","build":"npm run typecheck && vite build","preview":"vite preview","typecheck":"tsc --noEmit -p tsconfig.app.json"},"dependencies":{"@supabase/supabase-js":"^2.57.4","react":"^19.0.0","react-dom":"^19.0.0"},"devDependencies":{"@types/react":"^19.0.1","@types/react-dom":"^19.0.2","@vitejs/plugin-react":"^4.3.4","typescript":"^5.7.2","vite":"^6.0.1"}}
+{
+  "name": "srccvde-app",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run typecheck && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "test": "node --test tests/*.test.mjs",
+    "check:functions": "deno check --node-modules-dir=auto supabase/functions/*/index.ts",
+    "format": "prettier --write src supabase/functions scripts tests"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.117.3",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@electric-sql/pglite": "0.5.8",
+    "@fontsource-variable/inter": "5.3.0",
+    "@fontsource-variable/plus-jakarta-sans": "5.3.0",
+    "@playwright/test": "1.64.0",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "4.7.0",
+    "deno": "2.9.6",
+    "prettier": "3.9.10",
+    "supabase": "2.120.0",
+    "typescript": "5.9.3",
+    "vite": "6.4.4",
+    "wrangler": "4.149.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

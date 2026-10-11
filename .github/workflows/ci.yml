@@ -1,9 +1,10 @@
-name: CI
+name: Checks
 on:
+  pull_request:
   push:
     branches: [main, dev]
-  pull_request:
-    branches: [main, dev]
+permissions:
+  contents: read
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -12,9 +13,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install
-      - run: npm audit --omit=dev --audit-level=high
-      - run: npm run typecheck
+          cache: npm
+      - run: npm ci
+      - run: npm audit --audit-level=high
+      - run: npm test
+      - run: npm run check:functions
       - run: npm run build
         env:
           VITE_SUPABASE_URL: https://pszxarjungpoqvbwoblf.supabase.co

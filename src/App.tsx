@@ -1,775 +1,558 @@
-import { FormEvent,useEffect,useMemo,useRef,useState } from 'react'
-import type { Session } from '@supabase/supabase-js'
-import { supabase } from './lib/supabase'
+import {
+  FormEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  lazy,
+  Suspense,
+} from "react";
+import type { Session } from "@supabase/supabase-js";
+import { supabase } from "./lib/supabase";
+import { StaffMfa } from "./components/StaffMfa";
+import { path, label } from "./shared/workspace";
+import type { Profile, Membership } from "./shared/workspace";
 
-type Role='owner'|'admin'|'staff'|'client'
-type Membership={role:Role;status:'invited'|'active'|'suspended'}
-type Profile={full_name:string|null;email:string|null}
-type Inquiry={id:string;name:string;email:string;company:string|null;project_type:string;budget_range:string;timeline:string;involvement:string;details:string;status:string;created_at:string;updated_at:string}
-type Client={id:string;name:string;primary_contact_name:string;primary_email:string;status:string;drive_folder_id:string|null;created_at:string}
-type Project={id:string;client_id:string;name:string;project_type:string|null;status:string;phase:string;progress:number;created_at:string}
-type Note={id:string;body:string;created_at:string}
-type Activity={id:string;entity_type:string;entity_id:string;action:string;summary:string;created_at:string}
-type DocumentRow={id:string;client_id:string;name:string;category:string;state:string;client_visible:boolean;created_at:string;signature_kind?:'signature'|'acknowledgment'|null;executed_artifact_id?:string|null;drive_file_id?:string|null}
-type ExecutedArtifact={id:string;document_id:string;storage_path:string;final_sha256:string;byte_size:number;generated_at:string;drive_sync_status:'pending'|'synced'|'failed'|'not_configured';drive_file_id:string|null;drive_error:string|null;original_storage_path:string|null;original_sha256:string|null;drive_original_file_id:string|null;metadata?:{source_sha256?:string}|null}
-type Communication={id:string;client_id?:string;project_id?:string|null;channel:string;direction:string;subject:string|null;body:string;created_at:string;delivery_status?:string;sent_at?:string|null;delivered_at?:string|null;failed_at?:string|null}
-type SignatureRequest={id:string;document_id:string;document_version_id:string;client_id:string;project_id:string|null;signer_name:string;signer_email:string;signer_side:'client'|'srccvde';signature_kind:'signature'|'acknowledgment';status:string;consent_text:string;requested_at:string;signed_at:string|null;legal_name:string|null}
-type DocumentVersion={id:string;document_id:string;version_number:number;content_snapshot:string;content_sha256:string;state:string;created_at:string}
-type Milestone={id:string;project_id:string;milestone_key:string;title:string;description:string|null;position:number;status:string;client_visible:boolean;due_at?:string|null;completed_at?:string|null}
-type ClientAction={id:string;client_id:string;project_id:string|null;title:string;description:string|null;action_type:string;status:string;due_at:string|null;response:string|null;created_at:string;completed_at:string|null}
-type BillingInvoice={id:string;client_id:string;project_id:string|null;invoice_number:string;status:string;currency:string;subtotal_cents:number;tax_cents:number;total_cents:number;amount_paid_cents:number;issued_at:string|null;due_at:string|null;paid_at:string|null;notes:string|null;client_visible:boolean;created_at:string;artifact_path?:string|null;finalized_at?:string|null;clients?:{name:string}|null;projects?:{name:string}|null}
-type Handoff={id:string;client_id:string;project_id:string|null;status:string;meeting_at:string|null;meeting_url:string|null;verification_email:string|null;verified_at:string|null;effective_at:string|null;aftercare_ends_at:string|null;admin_removal_notice_at:string|null;admin_removed_at:string|null;retention_ends_at:string|null;archive_generated_at:string|null;archive_downloaded_at:string|null;data_deleted_at:string|null;notes:string|null;created_at:string;updated_at:string}
-type HandoffTask={id:string;handoff_id:string;task_key:string;title:string;category:string;position:number;required:boolean;status:'pending'|'complete'|'not_applicable';completed_at:string|null;completed_by:string|null;created_at:string}
-type TemplateContext={clientName:string;clientContact:string;clientEmail:string;projectName:string;projectType:string;projectPhase:string;today:string}
-type DocumentTemplate={id:string;label:string;description:string;documentName:string;category:string;signatureKind:'signature'|'acknowledgment';buildContent:(ctx:TemplateContext)=>string}
-const commonParties=(ctx:TemplateContext)=>[
- 'Date: '+ctx.today,
- 'Client: '+ctx.clientName,
- 'Primary contact: '+ctx.clientContact+' <'+ctx.clientEmail+'>',
- 'Service provider: SRCcvde',
- 'Project: '+ctx.projectName,
- 'Project type: '+ctx.projectType,
- 'Current project phase: '+ctx.projectPhase
-]
-const documentTemplates:DocumentTemplate[]=[
- {id:'service-agreement',label:'Service Agreement / Contract',description:'Primary agreement for a new client project. Use before substantive build work begins.',documentName:'Service Agreement',category:'agreement',signatureKind:'signature',buildContent:(ctx)=>[
-  'SERVICE AGREEMENT','',...commonParties(ctx),'',
-  '1. PROJECT PURPOSE','[REQUIRED: Describe the project goals and intended outcome.]','',
-  '2. SCOPE AND DELIVERABLES','[REQUIRED: List the included work, deliverables, platforms, and explicit exclusions.]','',
-  '3. SCHEDULE AND CLIENT DEPENDENCIES','[REQUIRED: State target dates, milestones, client-supplied materials/access, and expected review turnaround.]',
-  'Target dates are estimates unless expressly stated otherwise. Delays in client materials, approvals, access, or third-party services may reasonably shift the schedule.','',
-  '4. FEES AND PAYMENT','[REQUIRED: State project price, deposit/payment schedule, taxes if applicable, and any approved expenses.]',
-  'Work may be paused for overdue balances. SRCcvde retains access to and control of source materials necessary to perform the work until all amounts due for the project are paid in full.','',
-  '5. CHANGES AND ADDITIONAL SERVICES',
-  'Work outside the agreed scope requires written approval through a Scope Change Order, Additional Services Add-on, or other signed amendment. Approved changes may affect price and schedule.','',
-  '6. CLIENT RESPONSIBILITIES AND APPROVALS',
-  'The Client is responsible for timely feedback, approvals, credentials, content, brand assets, and other materials reasonably required for the project. The Client represents that it has the right to provide and authorize use of materials it supplies.','',
-  '7. INTELLECTUAL PROPERTY AND OWNERSHIP',
-  'Upon payment in full, the Client owns the final custom deliverables created specifically for the Client under this agreement, excluding SRCcvde pre-existing tools, reusable components, libraries, know-how, development methods, and third-party materials. Until payment in full, SRCcvde retains source access and ownership rights necessary to secure payment and complete the engagement.','',
-  '8. PORTFOLIO RIGHTS',
-  'Unless the parties agree in writing to a security or confidentiality exception, SRCcvde may identify the Client and display non-confidential portions of the completed work in its portfolio, website, proposals, and marketing materials after public launch.','',
-  '9. THIRD-PARTY SERVICES',
-  'Hosting, domains, payment processors, app stores, APIs, software subscriptions, and other third-party services are subject to their own terms, pricing, uptime, and policies. Unless expressly included in scope, the Client is responsible for third-party fees and accounts.','',
-  '10. CONFIDENTIALITY',
-  'Each party will use reasonable care to protect non-public business, technical, and customer information received from the other and will use it only for the engagement, except where disclosure is required by law or the information is independently public or lawfully obtained.','',
-  '11. ACCEPTANCE AND LAUNCH',
-  'The Client will review deliverables and identify material issues within the agreed review period. Launch, written approval, or continued production use may constitute acceptance of the applicable deliverable, subject to any written unresolved punch-list items.','',
-  '12. SUPPORT AND AFTERCARE',
-  'Ongoing maintenance, content changes, new features, monitoring, hosting administration, or support after the included post-launch period are not included unless stated in scope or covered by a separate Aftercare & Maintenance Agreement.','',
-  '13. TERMINATION',
-  'Either party may terminate the engagement in writing. The Client remains responsible for approved work performed and non-cancellable costs incurred through the termination date. SRCcvde will provide paid-for deliverables reasonably available at termination after outstanding balances are resolved.','',
-  '14. WARRANTIES AND LIMITATION',
-  'SRCcvde will perform services in a professional and workmanlike manner. Except for express commitments in this agreement, deliverables and third-party services are provided without additional warranties to the maximum extent permitted by law. Neither party will be liable for indirect, incidental, special, or consequential damages to the extent permitted by law. [REQUIRED: Confirm any negotiated liability cap or special warranty terms.]','',
-  '15. GOVERNING TERMS',
-  '[REQUIRED: Confirm governing state, venue, and any dispute-resolution terms approved for this engagement.]','',
-  '16. ELECTRONIC SIGNATURES; ENTIRE AGREEMENT',
-  'Electronic signatures and counterparts are intended to be effective as originals. This agreement and its signed exhibits, statements of work, addenda, and change orders contain the parties\' agreement for this project and supersede inconsistent prior project discussions.','',
-  '17. PROJECT-SPECIFIC TERMS','[OPTIONAL: Add any negotiated terms that do not conflict with the sections above.]'
- ].join('\n')},
- {id:'statement-of-work',label:'Proposal / Statement of Work',description:'Defines the recommended solution, deliverables, timeline, assumptions, and price before the main contract or as its project exhibit.',documentName:'Statement of Work',category:'proposal',signatureKind:'signature',buildContent:(ctx)=>[
-  'PROPOSAL / STATEMENT OF WORK','',...commonParties(ctx),'',
-  '1. CLIENT OBJECTIVE','[REQUIRED: Describe the problem, goal, and intended outcome.]','',
-  '2. PROPOSED SOLUTION','SRCcvde proposes a '+ctx.projectType+' engagement for '+ctx.projectName+'.','[REQUIRED: Describe the recommended solution and user experience.]','',
-  '3. DELIVERABLES','[REQUIRED: List each concrete deliverable and what is not included.]','',
-  '4. PROJECT PLAN','[REQUIRED: Describe stages, target dates, review windows, and launch assumptions.]','',
-  '5. CLIENT INPUTS','[REQUIRED: List content, credentials, approvals, files, and decisions required from the Client.]','',
-  '6. INVESTMENT','[REQUIRED: State price, deposit, payment milestones, taxes, and recurring third-party costs.]','',
-  '7. ASSUMPTIONS','[REQUIRED: State material assumptions used to estimate the work.]','',
-  '8. ACCEPTANCE',
-  'Approval of this Statement of Work authorizes SRCcvde to proceed subject to the governing Service Agreement and any stated payment requirements.'
- ].join('\n')},
- {id:'project-addendum',label:'Project Addendum',description:'Changes a contractual term in an existing signed agreement without replacing the entire agreement.',documentName:'Project Addendum',category:'agreement',signatureKind:'signature',buildContent:(ctx)=>[
-  'PROJECT ADDENDUM','',...commonParties(ctx),'',
-  'Related agreement: [REQUIRED: Enter agreement title and effective date]','',
-  '1. PURPOSE','[REQUIRED: Explain why this addendum is needed.]','',
-  '2. AGREEMENT CHANGES','[REQUIRED: Identify the exact term(s) being added, replaced, or revised.]','',
-  '3. PRICE OR SCHEDULE EFFECT','[REQUIRED: State any price/payment/timeline effect, or state "No change."]','',
-  '4. CONTINUING TERMS',
-  'Except as expressly changed by this addendum, the existing agreement remains in effect. If this addendum conflicts with the existing agreement, this addendum controls only as to the subject matter stated here.'
- ].join('\n')},
- {id:'additional-services',label:'Additional Services Add-on',description:'Adds new work that was not part of the original scope while keeping the original project intact.',documentName:'Additional Services Add-on',category:'scope',signatureKind:'signature',buildContent:(ctx)=>[
-  'ADDITIONAL SERVICES ADD-ON','',...commonParties(ctx),'',
-  '1. NEW SERVICES','[REQUIRED: Describe the additional services being added.]','',
-  '2. NEW DELIVERABLES','[REQUIRED: List the outputs included in this add-on.]','',
-  '3. ADDITIONAL FEES','[REQUIRED: State the added fee and payment timing.]','',
-  '4. SCHEDULE IMPACT','[REQUIRED: State added dates or whether the existing schedule changes.]','',
-  '5. RELATIONSHIP TO EXISTING AGREEMENT',
-  'This add-on supplements the existing Service Agreement. Terms not changed here remain in effect.'
- ].join('\n')},
- {id:'scope-change',label:'Scope Change Order',description:'Records a requested change to work already in scope, including what is added, removed, replaced, and the resulting impact.',documentName:'Scope Change Order',category:'scope',signatureKind:'signature',buildContent:(ctx)=>[
-  'SCOPE CHANGE ORDER','',...commonParties(ctx),'',
-  'Requested by: '+ctx.clientContact,'',
-  '1. REQUESTED CHANGE','[REQUIRED: Describe the requested change and business reason.]','',
-  '2. SCOPE IMPACT','[REQUIRED: Identify work being added, removed, or revised.]','',
-  '3. COST IMPACT','[REQUIRED: State added credit/cost, or state "No change."]','',
-  '4. SCHEDULE IMPACT','[REQUIRED: State the revised schedule, or state "No change."]','',
-  '5. APPROVAL',
-  'Once signed, this Change Order becomes part of the project agreement. Work affected by the change may wait for approval before proceeding.'
- ].join('\n')},
- {id:'launch-approval',label:'Launch Approval / Project Acceptance',description:'Client sign-off that the reviewed release is approved for launch or accepted with a documented punch list.',documentName:'Launch Approval',category:'approval',signatureKind:'signature',buildContent:(ctx)=>[
-  'LAUNCH APPROVAL / PROJECT ACCEPTANCE','',...commonParties(ctx),'',
-  '1. RELEASE BEING APPROVED','[REQUIRED: Identify the site/app/version/environment being approved.]','',
-  '2. REVIEW STATUS','[REQUIRED: Choose one: Approved for launch / Approved with punch-list items / Accepted as delivered.]','',
-  '3. OPEN ITEMS','[REQUIRED: List remaining approved punch-list items, or state "None."]','',
-  '4. LAUNCH AUTHORIZATION',
-  'The Client confirms it has reviewed the release described above and authorizes SRCcvde to launch or publish it as stated. Changes requested after this approval that are outside the agreed punch list may be treated as additional services.','',
-  '5. THIRD-PARTY AND PRODUCTION NOTICE',
-  'The Client understands that production behavior can be affected by browsers, devices, hosting providers, APIs, app stores, payment processors, and other third-party systems outside SRCcvde\'s direct control.'
- ].join('\n')},
- {id:'handoff-aftercare',label:'Handoff & Aftercare Agreement',description:'Final delivery agreement covering ownership transfer, the included 30-calendar-day aftercare period, access removal, and closeout responsibilities. Review before sending.',documentName:'Handoff & Aftercare Agreement',category:'agreement',signatureKind:'signature',buildContent:(ctx)=>[
-  'HANDOFF & AFTERCARE AGREEMENT','',...commonParties(ctx),'',
-  '1. HANDOFF AND ACCEPTANCE',
-  'The Client confirms that the project has reached handoff and that SRCcvde will review the delivered system, accounts, documentation, known limitations, and outstanding approved punch-list items during the handoff meeting.','',
-  '2. ACCOUNT AND OWNERSHIP TRANSFER',
-  'After this agreement is signed, the parties will complete the transfer of applicable repositories, databases, hosting, domains, deployment services, and other project accounts to the Client using a Client-verified email address. The Client is responsible for maintaining current billing methods, recovery methods, multifactor authentication, and secure administrator access after transfer.','',
-  '3. INCLUDED AFTERCARE',
-  'SRCcvde includes thirty (30) calendar days of aftercare beginning on the handoff effective date recorded in the SRCcvde workspace. Included aftercare covers reasonable handoff assistance and correction of reproducible defects in the delivered scope.','',
-  '4. AFTERCARE EXCLUSIONS',
-  'Aftercare does not include new features, redesigns, new integrations, new content, new business requirements, third-party subscription charges, recovery from Client-caused changes, or work caused by changes to third-party platforms outside SRCcvde control. Such work may be quoted separately.','',
-  '5. SRCcvde ADMIN ACCESS',
-  'SRCcvde may retain the minimum administrative access reasonably necessary to provide included aftercare. On the final day of the aftercare period, SRCcvde will notify the Client that SRCcvde administrative access is being removed and will promptly remove that access.','',
-  '6. CLIENT RESPONSIBILITY',
-  'The Client will maintain its own administrator access, verify transferred accounts, preserve credentials and recovery methods, and promptly report material issues during the aftercare period.','',
-  '7. CLOSEOUT',
-  'Completion of aftercare and removal of SRCcvde administrative access completes the operational handoff, subject to the separate Data Retention Agreement and any surviving terms of prior signed agreements.','',
-  '8. ELECTRONIC SIGNATURES',
-  'Electronic signatures and counterparts are intended to be effective as originals. The Client acknowledges the handoff process and included aftercare terms described above.'
- ].join('\n')},
- {id:'data-retention',label:'Data Retention Agreement',description:'Post-aftercare retention and deletion terms. Covers the 30-day client download window and the limited business records SRCcvde may retain. Review before sending.',documentName:'Data Retention Agreement',category:'agreement',signatureKind:'signature',buildContent:(ctx)=>[
-  'DATA RETENTION AGREEMENT','',...commonParties(ctx),'',
-  '1. RETENTION WINDOW',
-  'After the included 30-calendar-day aftercare period ends, SRCcvde will retain relevant Client Project Data for an additional thirty (30) calendar days solely to support orderly closeout, archive retrieval, and any final data-copy requests. The SRCcvde workspace will display the applicable retention-end date.','',
-  '2. CLIENT PROJECT DATA',
-  'Client Project Data may include project files, deliverables, communications, notes, workspace records, account-transfer records, and other operational project information maintained by SRCcvde for the engagement.','',
-  '3. CLIENT DOWNLOAD RESPONSIBILITY',
-  'The Client is responsible for downloading and securely retaining any information, files, executed documents, or other records it wishes to keep before the retention-end date. SRCcvde may provide a downloadable handoff archive containing fully executed project documents available in the document vault.','',
-  '4. DELETION AFTER RETENTION',
-  'After the retention window expires, SRCcvde will remove Client Project Data from active SRCcvde systems and disable the Client\'s SRCcvde workspace access. Data under SRCcvde\'s direct control will be deleted as part of closeout. Transient encrypted backup copies maintained automatically by infrastructure providers may persist only until the provider\'s normal backup-expiration cycle.','',
-  '5. BUSINESS RECORDS EXCEPTION',
-  'SRCcvde may retain executed contracts, amendments, invoices, payment records, tax records, dispute records, and other records that SRCcvde reasonably needs to establish the parties\' rights or satisfy legal, accounting, insurance, or compliance obligations. These retained business records are not available as an ongoing Client workspace.','',
-  '6. NO CONTINUING HOSTING OBLIGATION',
-  'After the retention-end date, SRCcvde has no obligation to continue hosting or maintaining Client Project Data unless the parties sign a separate written agreement.','',
-  '7. ACKNOWLEDGMENT',
-  'The Client acknowledges the retention schedule, the obligation to keep its own copies, and the limited business-record exception described above.'
- ].join('\n')},
- {id:'aftercare-maintenance',label:'Aftercare & Maintenance Agreement',description:'Defines post-launch support, included maintenance, response expectations, exclusions, and recurring fees.',documentName:'Aftercare & Maintenance Agreement',category:'agreement',signatureKind:'signature',buildContent:(ctx)=>[
-  'AFTERCARE & MAINTENANCE AGREEMENT','',...commonParties(ctx),'',
-  '1. COVERAGE','[REQUIRED: List included maintenance, support, monitoring, updates, and/or content work.]','',
-  '2. TERM','[REQUIRED: State start date, term, renewal behavior, and cancellation notice.]','',
-  '3. SERVICE LEVEL','[REQUIRED: State normal support hours, response targets, and emergency handling if offered.]','',
-  '4. FEES','[REQUIRED: State recurring fee, billing frequency, overage/hourly rates, and included hours if any.]','',
-  '5. EXCLUSIONS',
-  'Unless specifically included above, this agreement does not include new features, redesigns, major migrations, third-party subscription fees, recovery from client-caused changes, or work caused by unsupported third-party systems.','',
-  '6. ACCESS AND SECURITY',
-  'The Client will maintain required account ownership and provide appropriate access. SRCcvde may recommend credential, hosting, dependency, or security changes when reasonably necessary to maintain the service.','',
-  '7. END OF SERVICE',
-  'At the end of aftercare, SRCcvde will stop included maintenance on the effective end date. Outstanding balances remain due, and future work may be quoted separately.'
- ].join('\n')},
- {id:'termination-acknowledgment',label:'Project Termination Acknowledgment',description:'Documents an agreed project cancellation, financial closeout, deliverables, access, and what happens next.',documentName:'Project Termination Acknowledgment',category:'agreement',signatureKind:'signature',buildContent:(ctx)=>[
-  'PROJECT TERMINATION ACKNOWLEDGMENT','',...commonParties(ctx),'',
-  'Termination effective date: [REQUIRED: Enter date]','',
-  '1. TERMINATION BASIS','[REQUIRED: State whether termination is client-requested, SRCcvde-requested, or mutual and briefly explain.]','',
-  '2. FINANCIAL CLOSEOUT','[REQUIRED: State final amount due, refund/credit if any, and payment deadline.]','',
-  '3. DELIVERABLES AND SOURCE ACCESS','[REQUIRED: Identify what will be delivered or retained at closeout.]',
-  'Ownership and source access remain subject to the governing agreement and payment status.','',
-  '4. ACCOUNTS AND ACCESS','[REQUIRED: List credentials, domains, hosting, repositories, files, or third-party accounts to transfer, revoke, or leave unchanged.]','',
-  '5. SURVIVING TERMS',
-  'Payment obligations, confidentiality, intellectual-property provisions, and other terms intended by their nature to survive termination remain in effect under the governing agreement.'
- ].join('\n')},
- {id:'mutual-nda',label:'Mutual NDA / Confidentiality Agreement',description:'Use when either side may share non-public business or technical information before or during a project.',documentName:'Mutual Confidentiality Agreement',category:'agreement',signatureKind:'signature',buildContent:(ctx)=>[
-  'MUTUAL CONFIDENTIALITY AGREEMENT','',...commonParties(ctx),'',
-  '1. PURPOSE','The parties may share confidential information to evaluate, plan, perform, or support '+ctx.projectName+'.','',
-  '2. CONFIDENTIAL INFORMATION',
-  'Confidential Information means non-public business, financial, customer, security, product, design, source-code, credential, technical, and strategy information disclosed in any form that a reasonable person would understand to be confidential.','',
-  '3. EXCLUSIONS',
-  'Confidential Information does not include information that the receiving party can show was already lawfully known without restriction, becomes public without breach, is received lawfully from a third party, or is independently developed without use of the disclosed information.','',
-  '4. USE AND PROTECTION',
-  'Each party will use Confidential Information only for the stated purpose, protect it using reasonable care, and disclose it only to personnel or advisors who need it and are bound by confidentiality obligations.','',
-  '5. REQUIRED DISCLOSURE',
-  'A party may disclose Confidential Information when legally required, and when legally permitted will provide reasonable notice so the other party may seek protection.','',
-  '6. TERM','[REQUIRED: State confidentiality term and any special treatment for trade secrets.]','',
-  '7. NO LICENSE OR COMMITMENT',
-  'Disclosure does not transfer ownership or grant intellectual-property rights except the limited right to evaluate or perform the project. This agreement does not require either party to proceed with a transaction or project.','',
-  '8. GOVERNING TERMS','[REQUIRED: Confirm governing state and venue approved for this agreement.]'
- ].join('\n')}
-]
-const MAX_PROJECT_FILE_BYTES=25*1024*1024
-const PROJECT_FILE_EXTENSIONS=['pdf','png','jpg','jpeg','webp','svg','heic','heif','zip','doc','docx','xls','xlsx','ppt','pptx','csv','txt','md','mp4','mov']
-function validateProjectFile(file:File){if(file.size>MAX_PROJECT_FILE_BYTES)return 'Files must be 25 MB or smaller.';const ext=file.name.split('.').pop()?.toLowerCase()||'';if(!PROJECT_FILE_EXTENSIONS.includes(ext))return 'Unsupported file type. Use PDF, images including HEIC, ZIP, Office files, CSV, TXT, Markdown, MP4 or MOV.';return ''}
+import { Brand, Sidebar } from "./components/WorkspaceLayout";
 
+import { Login, SetPassword, PendingAccess } from "./features/auth";
+const SignDocumentPage = lazy(() =>
+  import("./features/signatures").then((module) => ({
+    default: module.SignDocumentPage,
+  })),
+);
+const ClientProjectPage = lazy(() =>
+  import("./features/client-workspace").then((module) => ({
+    default: module.ClientProjectPage,
+  })),
+);
+const ClientActionsPage = lazy(() =>
+  import("./features/client-workspace").then((module) => ({
+    default: module.ClientActionsPage,
+  })),
+);
+const ClientMessagesPage = lazy(() =>
+  import("./features/client-workspace").then((module) => ({
+    default: module.ClientMessagesPage,
+  })),
+);
+const ClientDeliverablesPage = lazy(() =>
+  import("./features/client-workspace").then((module) => ({
+    default: module.ClientDeliverablesPage,
+  })),
+);
+const ClientDocumentsPage = lazy(() =>
+  import("./features/client-workspace").then((module) => ({
+    default: module.ClientDocumentsPage,
+  })),
+);
+const ClientActivityPage = lazy(() =>
+  import("./features/client-workspace").then((module) => ({
+    default: module.ClientActivityPage,
+  })),
+);
+const ClientDashboard = lazy(() =>
+  import("./features/client-workspace").then((module) => ({
+    default: module.ClientDashboard,
+  })),
+);
+const ClientHandoffPage = lazy(() =>
+  import("./features/handoffs").then((module) => ({
+    default: module.ClientHandoffPage,
+  })),
+);
+const AdminHandoffPage = lazy(() =>
+  import("./features/handoffs").then((module) => ({
+    default: module.AdminHandoffPage,
+  })),
+);
+const AdminHandoffsPage = lazy(() =>
+  import("./features/handoffs").then((module) => ({
+    default: module.AdminHandoffsPage,
+  })),
+);
+const ClientBillingPage = lazy(() =>
+  import("./features/billing").then((module) => ({
+    default: module.ClientBillingPage,
+  })),
+);
+const AdminBillingPage = lazy(() =>
+  import("./features/billing").then((module) => ({
+    default: module.AdminBillingPage,
+  })),
+);
+const NotificationsPage = lazy(() =>
+  import("./features/notifications").then((module) => ({
+    default: module.NotificationsPage,
+  })),
+);
+const LeadDetail = lazy(() =>
+  import("./features/leads").then((module) => ({ default: module.LeadDetail })),
+);
+const LeadsPage = lazy(() =>
+  import("./features/leads").then((module) => ({ default: module.LeadsPage })),
+);
+const ClientDetail = lazy(() =>
+  import("./features/clients").then((module) => ({
+    default: module.ClientDetail,
+  })),
+);
+const ClientsPage = lazy(() =>
+  import("./features/clients").then((module) => ({
+    default: module.ClientsPage,
+  })),
+);
+const ProjectsPage = lazy(() =>
+  import("./features/projects").then((module) => ({
+    default: module.ProjectsPage,
+  })),
+);
+const DocumentsPage = lazy(() =>
+  import("./features/documents").then((module) => ({
+    default: module.DocumentsPage,
+  })),
+);
+const ActivityPage = lazy(() =>
+  import("./features/activity").then((module) => ({
+    default: module.ActivityPage,
+  })),
+);
+const AdminOverview = lazy(() =>
+  import("./features/overview").then((module) => ({
+    default: module.AdminOverview,
+  })),
+);
 
-const leadStatuses=['new','contacted','discovery','proposal','contract','won','lost','archived']
-const projectStages=[{value:'introduction',label:'Introduction'},{value:'discovery',label:'Discovery'},{value:'planning',label:'Planning'},{value:'contract',label:'Contract'},{value:'building',label:'Building'},{value:'developing',label:'Developing'},{value:'qa_qc',label:'QA/QC'},{value:'launch',label:'Launch'},{value:'aftercare',label:'Aftercare'},{value:'end_of_service',label:'End Of Service'}]
-const stages=projectStages.map(stage=>stage.label)
-const label=(s:string)=>s.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase())
-const date=(s:string)=>new Intl.DateTimeFormat(undefined,{month:'short',day:'numeric',year:'numeric'}).format(new Date(s))
-const money=(cents:number,currency='USD')=>new Intl.NumberFormat(undefined,{style:'currency',currency}).format((cents||0)/100)
-const addDaysIso=(value:string,days:number)=>new Date(new Date(value).getTime()+days*86400000).toISOString()
-const localDateTimeInput=(value:string|null)=>{if(!value)return '';const d=new Date(value);return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16)}
-const daysUntil=(value:string|null)=>value?Math.ceil((new Date(value).getTime()-Date.now())/86400000):null
-const path=()=>window.location.pathname.replace(/\/+$/,'')||'/'
+export function ClientRouter({
+  route,
+  profile,
+  navigate,
+}: {
+  route: string;
+  profile: Profile | null;
+  navigate: (p: string) => void;
+}) {
+  const sign = route.match(/^\/documents\/([0-9a-f-]+)$/i);
+  if (sign) return <SignDocumentPage requestId={sign[1]} navigate={navigate} />;
+  if (route === "/project") return <ClientProjectPage />;
+  if (route === "/actions") return <ClientActionsPage navigate={navigate} />;
+  if (route === "/messages") return <ClientMessagesPage />;
+  if (route === "/deliverables") return <ClientDeliverablesPage />;
+  if (route === "/handoff") return <ClientHandoffPage />;
+  if (route === "/billing") return <ClientBillingPage />;
+  if (route === "/documents")
+    return <ClientDocumentsPage navigate={navigate} />;
+  if (route === "/activity") return <ClientActivityPage />;
+  if (route === "/notifications") return <NotificationsPage />;
+  return <ClientDashboard profile={profile} navigate={navigate} />;
+}
 
-function Brand(){return <a className="brand" href="/" onClick={e=>{e.preventDefault();history.pushState({},'', '/');dispatchEvent(new PopStateEvent('popstate'))}} aria-label="SRCcvde workspace"><span>SRC</span>cvde<i/></a>}
-function Avatar({name}:{name:string}){return <div className="avatar">{name.split(/\s+/).map(x=>x[0]).join('').slice(0,2).toUpperCase()}</div>}
-function Empty({children}:{children:string}){return <div className="empty">{children}</div>}
-function LoadState({loading,error,onRetry,loadingText}:{loading:boolean;error:string|null;onRetry:()=>void|Promise<void>;loadingText:string}){if(loading)return <p className="muted" role="status">{loadingText}</p>;if(error)return <div className="load-error" role="alert"><span>{error}</span><button className="ghost inline" onClick={()=>{void onRetry()}}>Try again</button></div>;return null}
-function StatusPill({value}:{value:string}){const copy=value==='partial_paid'?'Partially paid':label(value);return <span className={'pill '+value}>{copy}</span>}
+export function AdminRouter({
+  route,
+  profile,
+  navigate,
+}: {
+  route: string;
+  profile: Profile | null;
+  navigate: (p: string) => void;
+}) {
+  const lead = route.match(/^\/leads\/([0-9a-f-]+)$/i),
+    client = route.match(/^\/clients\/([0-9a-f-]+)$/i),
+    handoff = route.match(/^\/handoffs\/([0-9a-f-]+)$/i),
+    sign = route.match(/^\/documents\/([0-9a-f-]+)$/i);
+  if (sign)
+    return (
+      <SignDocumentPage requestId={sign[1]} navigate={navigate} staffPreview />
+    );
+  if (lead) return <LeadDetail id={lead[1]} navigate={navigate} />;
+  if (client) return <ClientDetail id={client[1]} navigate={navigate} />;
+  if (handoff)
+    return <AdminHandoffPage clientId={handoff[1]} navigate={navigate} />;
+  if (route === "/leads") return <LeadsPage navigate={navigate} />;
+  if (route === "/clients") return <ClientsPage navigate={navigate} />;
+  if (route === "/projects") return <ProjectsPage />;
+  if (route === "/handoffs") return <AdminHandoffsPage navigate={navigate} />;
+  if (route === "/documents") return <DocumentsPage />;
+  if (route === "/billing") return <AdminBillingPage />;
+  if (route === "/activity") return <ActivityPage />;
+  if (route === "/notifications") return <NotificationsPage />;
+  return <AdminOverview profile={profile} navigate={navigate} />;
+}
 
-function Login(){
- const[email,setEmail]=useState(''),[password,setPassword]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[showPassword,setShowPassword]=useState(false)
- async function submit(e:FormEvent){e.preventDefault();setBusy(true);setMessage('');const{error}=await supabase.auth.signInWithPassword({email,password});setBusy(false);if(error)setMessage(error.message)}
- async function reset(){if(!email){setMessage('Enter your email first.');return}setBusy(true);const{error}=await supabase.auth.resetPasswordForEmail(email,{redirectTo:'https://app.srccvde.com/set-password'});setBusy(false);setMessage(error?error.message:'Password reset email sent.')}
- return <main className="auth-page">
-  <section className="auth-copy">
-   <Brand/>
-   <div className="auth-story">
-    <p className="eyebrow">SRCcvde Workspace</p>
-    <h1>Your project has a home.</h1>
-    <p>One secure place for progress, documents, approvals, and everything we build together.</p>
-    <div className="auth-points">
-     <div className="auth-point"><b>01</b><span>Project progress</span></div>
-     <div className="auth-point"><b>02</b><span>Shared decisions</span></div>
-     <div className="auth-point"><b>03</b><span>One clear journey</span></div>
+export default function App() {
+  const initialHash = useMemo(
+    () => new URLSearchParams(location.hash.replace(/^#/, "")),
+    [],
+  );
+  const initialAuthType = initialHash.get("type");
+  const initialCode = useMemo(
+    () => new URLSearchParams(location.search).get("code"),
+    [],
+  );
+  const [session, setSession] = useState<Session | null>(null),
+    [loading, setLoading] = useState(true),
+    [membership, setMembership] = useState<Membership | null>(null),
+    [profile, setProfile] = useState<Profile | null>(null),
+    [route, setRoute] = useState(path()),
+    [passwordFlow, setPasswordFlow] = useState(false),
+    [authLinkError, setAuthLinkError] = useState(""),
+    [mobileNav, setMobileNav] = useState(false),
+    [accessLoading, setAccessLoading] = useState(false),
+    [accessError, setAccessError] = useState(""),
+    [online, setOnline] = useState(() => navigator.onLine);
+  useEffect(() => {
+    const pop = () => {
+      setRoute(path());
+      setMobileNav(false);
+    };
+    addEventListener("popstate", pop);
+    return () => removeEventListener("popstate", pop);
+  }, []);
+  useEffect(() => {
+    let alive = true;
+    const boot = async () => {
+      if (route === "/set-password") {
+        const accessToken = initialHash.get("access_token"),
+          refreshToken = initialHash.get("refresh_token");
+        if (
+          (initialAuthType === "recovery" || initialAuthType === "invite") &&
+          accessToken &&
+          refreshToken
+        ) {
+          const { data, error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (!alive) return;
+          if (error) {
+            setAuthLinkError(error.message);
+            setLoading(false);
+            return;
+          }
+          setPasswordFlow(true);
+          setSession(data.session);
+          setLoading(false);
+          return;
+        }
+        if (initialCode) {
+          const { data, error } =
+            await supabase.auth.exchangeCodeForSession(initialCode);
+          if (!alive) return;
+          if (error) {
+            setAuthLinkError(error.message);
+            setLoading(false);
+            return;
+          }
+          setPasswordFlow(true);
+          setSession(data.session);
+          setLoading(false);
+          return;
+        }
+      }
+      const { data } = await supabase.auth.getSession();
+      if (alive) {
+        setSession(data.session);
+        setLoading(false);
+      }
+    };
+    boot();
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, s) => {
+      if (event === "PASSWORD_RECOVERY") setPasswordFlow(true);
+      setSession(s);
+      if (!s) {
+        setMobileNav(false);
+        setMembership(null);
+        setProfile(null);
+      }
+    });
+    return () => {
+      alive = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+  useEffect(() => {
+    const up = () => setOnline(true),
+      down = () => setOnline(false);
+    addEventListener("online", up);
+    addEventListener("offline", down);
+    return () => {
+      removeEventListener("online", up);
+      removeEventListener("offline", down);
+    };
+  }, []);
+  useEffect(() => {
+    if (!session) {
+      setAccessLoading(false);
+      setAccessError("");
+      return;
+    }
+    setAccessLoading(true);
+    setAccessError("");
+    Promise.all([
+      supabase
+        .from("app_memberships")
+        .select("role,status")
+        .eq("user_id", session.user.id)
+        .maybeSingle(),
+      supabase
+        .from("profiles")
+        .select("full_name,email")
+        .eq("id", session.user.id)
+        .maybeSingle(),
+    ])
+      .then(([m, p]) => {
+        if (m.error) {
+          setAccessError(
+            "We could not verify your workspace access. Check your connection and try again.",
+          );
+          setAccessLoading(false);
+          return;
+        }
+        setMembership(m.data as Membership | null);
+        setProfile(p.data as Profile | null);
+        setAccessLoading(false);
+      })
+      .catch(() => {
+        setAccessError(
+          "We could not verify your workspace access. Check your connection and try again.",
+        );
+        setAccessLoading(false);
+      });
+  }, [session]);
+  useEffect(() => {
+    if (!mobileNav) return;
+    const close = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileNav(false);
+    };
+    const workspace = document.getElementById("main-workspace");
+    document.body.classList.add("nav-open");
+    workspace?.setAttribute("inert", "");
+    addEventListener("keydown", close);
+    requestAnimationFrame(() =>
+      document
+        .querySelector<HTMLElement>("#workspace-navigation nav button")
+        ?.focus(),
+    );
+    return () => {
+      document.body.classList.remove("nav-open");
+      workspace?.removeAttribute("inert");
+      removeEventListener("keydown", close);
+      requestAnimationFrame(() =>
+        document.querySelector<HTMLElement>(".mobile-menu-button")?.focus(),
+      );
+    };
+  }, [mobileNav]);
+  const active = useMemo(
+    () => (membership?.status === "active" ? membership : null),
+    [membership],
+  );
+  const workspaceRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const section =
+      route === "/"
+        ? "Overview"
+        : label(route.split("/").filter(Boolean)[0] || "Overview");
+    document.title = section + " — SRCcvde Workspace";
+  }, [route]);
+  useEffect(() => {
+    if (!active) return;
+    requestAnimationFrame(() =>
+      workspaceRef.current?.focus({ preventScroll: true }),
+    );
+  }, [route, active]);
+  const resumeChecked = useRef(false);
+  const routeKey =
+    active && session?.user?.id
+      ? "srccvde:last-route:" + session.user.id
+      : null;
+  useEffect(() => {
+    if (!active || !routeKey || resumeChecked.current) return;
+    resumeChecked.current = true;
+    if (route === "/") {
+      try {
+        const saved = localStorage.getItem(routeKey);
+        if (
+          saved &&
+          saved.startsWith("/") &&
+          !saved.startsWith("//") &&
+          saved !== "/" &&
+          saved !== "/set-password"
+        ) {
+          history.replaceState({}, "", saved);
+          setRoute(path());
+          return;
+        }
+      } catch {}
+    }
+  }, [active, routeKey, route]);
+  useEffect(() => {
+    if (
+      !active ||
+      !routeKey ||
+      !resumeChecked.current ||
+      route === "/set-password"
+    )
+      return;
+    try {
+      localStorage.setItem(routeKey, route);
+    } catch {}
+  }, [route, active, routeKey]);
+  useEffect(() => {
+    if (!active || !routeKey) return;
+    const scrollKey = routeKey + ":scroll";
+    const save = () => {
+      try {
+        sessionStorage.setItem(
+          scrollKey,
+          JSON.stringify({ route: path(), y: window.scrollY }),
+        );
+      } catch {}
+    };
+    window.addEventListener("pagehide", save);
+    return () => {
+      window.removeEventListener("pagehide", save);
+    };
+  }, [active, routeKey]);
+  useEffect(() => {
+    if (!active || !routeKey || !resumeChecked.current) return;
+    try {
+      const saved = JSON.parse(
+        sessionStorage.getItem(routeKey + ":scroll") || "null",
+      );
+      if (saved?.route === route && Number.isFinite(saved.y) && saved.y > 0) {
+        requestAnimationFrame(() => window.scrollTo(0, saved.y));
+        sessionStorage.removeItem(routeKey + ":scroll");
+      }
+    } catch {}
+  }, [active, routeKey, route]);
+  const navigate = (p: string) => {
+    history.pushState({}, "", p);
+    if (routeKey) {
+      try {
+        localStorage.setItem(routeKey, p);
+        sessionStorage.removeItem(routeKey + ":scroll");
+      } catch {}
+    }
+    setRoute(path());
+    setMobileNav(false);
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  };
+  if (loading)
+    return (
+      <main className="loading">
+        <Brand />
+        <span>Opening workspace…</span>
+      </main>
+    );
+  if (route === "/set-password" && (!passwordFlow || !session))
+    return (
+      <main className="pending">
+        <Brand />
+        <p className="eyebrow">Secure password setup</p>
+        <h1>
+          {authLinkError
+            ? "This password link could not be opened."
+            : "This password link isn't active."}
+        </h1>
+        <p>
+          {authLinkError
+            ? "The link may have expired or already been used. Request a fresh password email and try again."
+            : "For your protection, a password can only be changed from the recovery or invitation link sent to that account."}
+        </p>
+        <button
+          className="primary"
+          onClick={async () => {
+            await supabase.auth.signOut();
+            history.replaceState({}, "", "/");
+            location.reload();
+          }}
+        >
+          Return to sign in
+        </button>
+      </main>
+    );
+  if (!session) return <Login />;
+  if (route === "/set-password") return <SetPassword />;
+  if (accessLoading)
+    return (
+      <main className="loading">
+        <Brand />
+        <span>Preparing your workspace…</span>
+      </main>
+    );
+  if (accessError)
+    return (
+      <main className="pending">
+        <Brand />
+        <p className="eyebrow">Connection check</p>
+        <h1>We couldn’t open your workspace.</h1>
+        <p>{accessError}</p>
+        <button className="primary" onClick={() => location.reload()}>
+          Try again
+        </button>
+      </main>
+    );
+  if (!active) return <PendingAccess email={session.user.email} />;
+  const workspace = (
+    <div className="app-shell">
+      <a className="skip-link" href="#main-workspace">
+        Skip to main content
+      </a>
+      {!online && (
+        <div className="offline-banner" role="status">
+          You’re offline. Changes may not save until your connection returns.
+        </div>
+      )}
+      <header className="mobile-bar">
+        <Brand />
+        <button
+          className="mobile-menu-button"
+          aria-label={mobileNav ? "Close navigation" : "Open navigation"}
+          aria-expanded={mobileNav}
+          aria-controls="workspace-navigation"
+          onClick={() => setMobileNav((v) => !v)}
+        >
+          Menu
+        </button>
+      </header>
+      {mobileNav && (
+        <button
+          className="mobile-scrim"
+          aria-label="Close navigation"
+          onClick={() => setMobileNav(false)}
+        />
+      )}
+      <Sidebar
+        role={active.role}
+        current={route}
+        navigate={navigate}
+        mobileOpen={mobileNav}
+        onNavigate={() => setMobileNav(false)}
+        onSignOut={() => supabase.auth.signOut()}
+      />
+      <main
+        id="main-workspace"
+        ref={workspaceRef}
+        tabIndex={-1}
+        className="workspace"
+      >
+        {active.role === "client" ? (
+          <Suspense fallback={<p role="status">Loading workspace…</p>}>
+            <ClientRouter route={route} profile={profile} navigate={navigate} />
+          </Suspense>
+        ) : (
+          <Suspense fallback={<p role="status">Loading workspace…</p>}>
+            <AdminRouter route={route} profile={profile} navigate={navigate} />
+          </Suspense>
+        )}
+      </main>
     </div>
-   </div>
-   <p className="auth-signature">A thoughtful workspace for the work we create together.</p>
-  </section>
-  <section className="auth-panel">
-   <div className="auth-card">
-    <header className="auth-card-head">
-     <p className="eyebrow">Private access</p>
-     <h2>Welcome back.</h2>
-     <p>Sign in to pick up where your project left off.</p>
-    </header>
-    <form className="auth-form" onSubmit={submit}>
-     <label htmlFor="auth-email">Email address<input id="auth-email" type="email" autoComplete="email" inputMode="email" autoCapitalize="none" spellCheck={false} value={email} onChange={e=>setEmail(e.target.value)} required/></label>
-     <div className="auth-password-field"><label htmlFor="auth-password">Password</label><div className="auth-password"><input id="auth-password" type={showPassword?'text':'password'} autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required/><button className="auth-password-toggle" type="button" aria-label={showPassword?'Hide password':'Show password'} aria-pressed={showPassword} onClick={()=>setShowPassword(v=>!v)}>{showPassword?'Hide':'Show'}</button></div></div>
-     <div className="auth-form-meta"><button className="text-button" type="button" onClick={reset} disabled={busy}>Forgot password?</button></div>
-     <button className="primary auth-submit" disabled={busy}>{busy?'Signing in…':'Sign in'}</button>
-     {message&&<p id="auth-message" className="form-message" role="status" aria-live="polite">{message}</p>}
-     <p className="fine">Accounts are created by SRCcvde. Access is provided when your project workspace is ready.</p>
-    </form>
-   </div>
-  </section>
- </main>
-}
-
-function SetPassword(){
- const[password,setPassword]=useState(''),[confirm,setConfirm]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState('')
- async function submit(e:FormEvent){e.preventDefault();if(password.length<12){setMessage('Use at least 12 characters.');return}if(!/[a-z]/.test(password)||!/[A-Z]/.test(password)||!/[0-9]/.test(password)||!/[^A-Za-z0-9]/.test(password)){setMessage('Use uppercase, lowercase, a number, and a symbol.');return}if(password!==confirm){setMessage('Passwords do not match.');return}setBusy(true);const{error}=await supabase.auth.updateUser({password});setBusy(false);if(error){setMessage(error.message);return}history.replaceState({},'', '/');location.reload()}
- return <main className="auth-page"><section className="auth-copy"><Brand/><p className="eyebrow">SRCcvde Workspace</p><h1>Make this workspace yours.</h1><p>Create the password you'll use whenever you return to app.srccvde.com.</p></section><section className="auth-panel"><form onSubmit={submit}><p className="eyebrow">Account setup</p><h2>Set your password.</h2><label>New password<input type="password" autoComplete="new-password" value={password} onChange={e=>setPassword(e.target.value)} required minLength={12}/></label><label>Confirm password<input type="password" autoComplete="new-password" value={confirm} onChange={e=>setConfirm(e.target.value)} required minLength={12}/></label><p className="fine">Use 12+ characters with uppercase, lowercase, a number, and a symbol.</p><button className="primary" disabled={busy}>{busy?'Saving…':'Save password & continue'}</button>{message&&<p className="form-message" role="status" aria-live="polite">{message}</p>}</form></section></main>
-}
-
-const PUSH_PUBLIC_KEY='BL69KF1eYFXO1LSqLxw0Hp2gYCeJvobxGFN4cXC_h-Nx8hrnxTIadP6WUWfQVEPjmEgf1C-hEmFCCtJcNJHZugI'
-function pushKeyBytes(value:string){const padding='='.repeat((4-value.length%4)%4);const raw=atob((value+padding).replace(/-/g,'+').replace(/_/g,'/'));return Uint8Array.from([...raw].map(char=>char.charCodeAt(0)))}
-function pushKeyMatches(sub:PushSubscription){const current=new Uint8Array(sub.options.applicationServerKey||new ArrayBuffer(0));const expected=pushKeyBytes(PUSH_PUBLIC_KEY);return current.length===expected.length&&current.every((byte,i)=>byte===expected[i])}
-
-function NotificationsPage(){
- const defaults={project_updates:true,documents:true,approvals:true,messages:true,billing:true,security:true,marketing:false}
- const[prefs,setPrefs]=useState<Record<string,boolean>>(defaults),[loadingPrefs,setLoadingPrefs]=useState(true),[saving,setSaving]=useState(''),[notice,setNotice]=useState(''),[permission,setPermission]=useState<NotificationPermission>(typeof Notification==='undefined'?'default':Notification.permission),[requesting,setRequesting]=useState(false),[subscribed,setSubscribed]=useState(false),[devices,setDevices]=useState<any[]>([]),[isStaff,setIsStaff]=useState(false),[delivery,setDelivery]=useState({pending:0,failed:0,sent:0,skipped:0}),[deliveryBusy,setDeliveryBusy]=useState(false)
- const supported=typeof window!=='undefined'&&'Notification' in window&&'serviceWorker' in navigator&&'PushManager' in window
- const categories=[['project_updates','Project updates','Milestones, status changes, and project activity.'],['documents','Documents & signatures','Documents that need review, signature, or acknowledgment.'],['approvals','Approvals','Decisions and approvals waiting for you.'],['messages','Messages','New workspace messages and replies.'],['billing','Billing','Invoice and payment-status updates.'],['security','Security & account','Important account and security activity.'],['marketing','Product news & marketing','Optional SRCcvde product news. Off by default.']]
- const loadDevices=async()=>{const{data:{user}}=await supabase.auth.getUser();if(!user)return;const{data}=await supabase.from('push_subscriptions').select('id,endpoint,user_agent,enabled,consented_at,updated_at').eq('user_id',user.id).order('updated_at',{ascending:false});setDevices(data||[])}
- const loadDelivery=async()=>{const{data:{user}}=await supabase.auth.getUser();if(!user)return;const{data:m}=await supabase.from('app_memberships').select('role,status').eq('user_id',user.id).maybeSingle();const staff=Boolean(m&&m.status==='active'&&['owner','admin','staff'].includes(m.role));setIsStaff(staff);if(!staff)return;const{data:jobs}=await supabase.from('notification_outbox').select('status').order('created_at',{ascending:false}).limit(200);const next={pending:0,failed:0,sent:0,skipped:0};(jobs||[]).forEach((job:any)=>{if(job.status in next)next[job.status as keyof typeof next]++});setDelivery(next)}
-
- useEffect(()=>{let alive=true;loadDelivery();loadDevices();supabase.auth.getUser().then(async({data})=>{if(!data.user){if(alive)setLoadingPrefs(false);return}const{data:p,error}=await supabase.from('notification_preferences').select('project_updates,documents,approvals,messages,billing,security,marketing').eq('user_id',data.user.id).maybeSingle();if(alive){if(p)setPrefs({...defaults,...p});if(error)setNotice('Could not load saved notification preferences.');setLoadingPrefs(false)}if(supported&&Notification.permission==='granted'){try{const reg=await navigator.serviceWorker.ready;const sub=await reg.pushManager.getSubscription();if(sub&&!pushKeyMatches(sub)){await sub.unsubscribe();if(alive)setSubscribed(false)}else if(alive)setSubscribed(Boolean(sub))}catch{}}});return()=>{alive=false}},[])
- async function toggle(key:string){const next={...prefs,[key]:!prefs[key]};setPrefs(next);setSaving(key);setNotice('');const{data:{user}}=await supabase.auth.getUser();if(!user){setNotice('Please sign in again.');setSaving('');return}const{error}=await supabase.from('notification_preferences').upsert({user_id:user.id,...next,updated_at:new Date().toISOString()});if(error){setPrefs(prefs);setNotice('That preference could not be saved. Please try again.')}else setNotice('Preferences saved.');setSaving('')}
- async function retryFailed(){setDeliveryBusy(true);setNotice('');const{data,error}=await supabase.rpc('retry_failed_notifications');if(error)setNotice(error.message);else{await supabase.functions.invoke('dispatch-notifications');setNotice((data||0)+' failed notification'+(data===1?'':'s')+' queued for retry.');await loadDelivery()}setDeliveryBusy(false)}
- async function sendTestNotification(){setRequesting(true);setNotice('');try{const{data:{user}}=await supabase.auth.getUser();if(!user)throw new Error('Please sign in again.');const reg=await navigator.serviceWorker.ready;const sub=await reg.pushManager.getSubscription();if(!sub)throw new Error('This device does not have an active SRCcvde push subscription. Disable and re-enable notifications, then try again.');const{data,error}=await supabase.functions.invoke('send-push-notification',{body:{user_id:user.id,endpoint:sub.endpoint,category:'security',title:'SRCcvde notifications are live',body:'Your test notification arrived. Push is working on this device.',url:'/notifications',tag:'push-test-'+Date.now()}});if(error)throw error;const provider=data?.deliveries?.[0]?.provider;if(data?.sent>0)setNotice((provider==='apple'?'Apple':provider==='fcm'?'Google Push':'Push provider')+' accepted the test for this device. If no banner appears, refresh this device subscription and check iOS notification settings.');else setNotice(data?.skipped==='preference_disabled'?'Security notifications are disabled in your preferences.':'This device subscription was not accepted. Disable and re-enable notifications, then try again.')}catch(e){setNotice(e instanceof Error?e.message:'Could not send the test notification.')}finally{setRequesting(false)}}
- async function disableThisDevice(){if(!supported)return;setRequesting(true);setNotice('');try{const reg=await navigator.serviceWorker.ready;const sub=await reg.pushManager.getSubscription();const{data:{user}}=await supabase.auth.getUser();if(user&&sub){await supabase.from('push_subscriptions').update({enabled:false,revoked_at:new Date().toISOString()}).eq('user_id',user.id).eq('endpoint',sub.endpoint);await sub.unsubscribe();await supabase.from('notification_consent_events').insert({user_id:user.id,action:'revoked',consent_text_version:'push-consent-2026-10-02-v1'})}setSubscribed(false);await loadDevices();setNotice('Push notifications are disabled for this device. Other connected devices are unchanged.')}catch{setNotice('Could not disable this device. Please try again.')}finally{setRequesting(false)}}
- async function requestPermission(){if(!supported)return;setRequesting(true);setNotice('');try{const result=await Notification.requestPermission();setPermission(result);const{data:{user}}=await supabase.auth.getUser();if(user)await supabase.from('notification_consent_events').insert({user_id:user.id,action:result==='granted'?'granted':'denied',consent_text_version:'push-consent-2026-10-02-v1'});if(result==='granted'&&user){const reg=await navigator.serviceWorker.ready;let sub=await reg.pushManager.getSubscription();if(sub&&!pushKeyMatches(sub)){await sub.unsubscribe();sub=null}if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:pushKeyBytes(PUSH_PUBLIC_KEY)});const json=sub.toJSON();const{error:subError}=await supabase.from('push_subscriptions').upsert({user_id:user.id,endpoint:sub.endpoint,p256dh:json.keys?.p256dh||'',auth_key:json.keys?.auth||'',user_agent:navigator.userAgent,enabled:true,consented_at:new Date().toISOString(),revoked_at:null},{onConflict:'endpoint'});if(subError)throw subError;await supabase.functions.invoke('dispatch-notifications');setSubscribed(true);await loadDevices();setNotice('Notifications are enabled on this device. Other devices on this account remain subscribed.')}else setNotice(result==='denied'?'Notifications are blocked for this site. You can change that in your device or browser settings.':'Notification permission was not enabled.')}catch{setNotice('Could not request notification permission on this device.')}finally{setRequesting(false)}}
- async function revokeDevice(device:any){setRequesting(true);setNotice('');try{const{error}=await supabase.from('push_subscriptions').update({enabled:false,revoked_at:new Date().toISOString()}).eq('id',device.id);if(error)throw error;const reg=await navigator.serviceWorker.ready;const current=await reg.pushManager.getSubscription();if(current&&current.endpoint===device.endpoint){await current.unsubscribe();setSubscribed(false)}await loadDevices();setNotice('That device was disconnected from push notifications.')}catch(e){setNotice(e instanceof Error?e.message:'Could not disconnect that device.')}finally{setRequesting(false)}}
- const deviceLabel=(ua:string)=>/iPhone/i.test(ua)?'iPhone':/iPad/i.test(ua)?'iPad':/Android/i.test(ua)?'Android device':/Chrome/i.test(ua)&&/Macintosh/i.test(ua)?'Chrome on Mac':/Safari/i.test(ua)&&/Macintosh/i.test(ua)?'Safari on Mac':/Windows/i.test(ua)?'Windows device':'Connected device'
- const state=!supported?'Unsupported':permission==='denied'?'Blocked':subscribed?'Enabled':'Disabled'
- return <><header className="page-title"><p className="eyebrow">Device preferences</p><h1>Notifications</h1><p>Choose how SRCcvde keeps you updated on this device.</p></header><section className="panel"><div className="section-head"><div><p className="eyebrow">Permission</p><h2>Push notifications</h2></div><span className="status-pill">{state}</span></div><p className="muted">Enable SRCcvde notifications on this device for project, document, approval, billing, message, and security updates. Notifications may appear on your lock screen depending on your device settings. You can change categories or disable notifications later.</p>{permission==='default'&&supported&&<button className="primary" disabled={requesting} onClick={requestPermission}>{requesting?'Requesting…':'Enable notifications'}</button>}{permission==='granted'&&<><p className="muted">{subscribed?'This device is subscribed and ready to receive SRCcvde push notifications.':'Notifications are off in SRCcvde. Your browser may still show notification permission as allowed; that permission is controlled by the browser/OS and does not mean SRCcvde is subscribed.'}</p><div className="detail-actions"><button className="primary" disabled={requesting} onClick={subscribed?sendTestNotification:requestPermission}>{requesting?'Working…':subscribed?'Send test notification':'Enable notifications'}</button>{subscribed&&<button className="secondary" disabled={requesting} onClick={disableThisDevice}>{requesting?'Updating…':'Disable on this device'}</button>}</div></>}{permission==='denied'&&<p className="muted">Your browser or device has blocked notifications. SRCcvde cannot override that choice.</p>}{!supported&&<p className="muted">Push notifications are not available in this browser or app mode.</p>}</section><section className="panel notification-devices"><div className="section-head"><div><p className="eyebrow">Connected devices</p><h2>Where notifications can arrive</h2></div><span className="status">{devices.filter(d=>d.enabled).length} active</span></div><div className="notification-device-list">{devices.length?devices.map(d=><article className="notification-device" key={d.id}><div><b>{deviceLabel(d.user_agent||'')}</b><small>{d.enabled?'Active':'Disconnected'} · {d.consented_at?'Enabled '+date(d.consented_at):'Subscription saved'}</small></div><div className="detail-actions">{d.enabled?<button className="ghost" disabled={requesting} onClick={()=>revokeDevice(d)}>Disconnect</button>:<span className="pill archived">Disconnected</span>}</div></article>):<Empty>No notification devices are connected yet.</Empty>}</div><p className="muted">You can enable SRCcvde notifications on multiple phones, tablets, or computers. Each device keeps its own subscription.</p></section>{isStaff&&<section className="panel notification-ops"><div className="section-head"><div><p className="eyebrow">Delivery operations</p><h2>Notification health</h2></div><span className={'attention-health '+(delivery.failed?'needs-work':'clear')}>{delivery.failed?delivery.failed+' failed':'Healthy'}</span></div><div className="notification-health-grid"><article><small>Pending</small><strong>{delivery.pending}</strong></article><article><small>Failed</small><strong>{delivery.failed}</strong></article><article><small>Sent</small><strong>{delivery.sent}</strong></article><article><small>Skipped</small><strong>{delivery.skipped}</strong></article></div><p className="muted">This is the latest notification delivery window. Skipped usually means the recipient has no active device subscription or disabled that category.</p>{delivery.failed>0&&<button className="secondary" disabled={deliveryBusy} onClick={retryFailed}>{deliveryBusy?'Retrying…':'Retry failed notifications'}</button>}</section>}<section className="panel"><div className="section-head"><div><p className="eyebrow">Preferences</p><h2>What can notify you</h2></div></div><div className="notification-preferences">{categories.map(([key,name,copy])=><label className="preference-row" key={key}><span><b>{name}</b><small>{copy}</small></span><input type="checkbox" checked={Boolean(prefs[key])} disabled={loadingPrefs||saving===key} onChange={()=>toggle(key)} aria-label={name}/></label>)}</div>{notice&&<p className="muted">{notice}</p>}<p className="muted">Marketing remains separate from operational notifications and is off by default.</p></section></>
-}
-
-function Sidebar({role,current,navigate,onSignOut,mobileOpen=false,onNavigate}:{role:Role;current:string;navigate:(p:string)=>void;onSignOut:()=>void;mobileOpen?:boolean;onNavigate?:()=>void}){
- const admin=role!=='client'
- const items=admin?[['Overview','/'],['Leads','/leads'],['Clients','/clients'],['Projects','/projects'],['Handoffs','/handoffs'],['Documents','/documents'],['Billing','/billing'],['Activity','/activity'],['Notifications','/notifications']]:[['Overview','/'],['Project','/project'],['Actions','/actions'],['Messages','/messages'],['Deliverables','/deliverables'],['Handoff','/handoff'],['Billing','/billing'],['Documents','/documents'],['Activity','/activity'],['Notifications','/notifications']]
- return <aside id="workspace-navigation" aria-label="Workspace navigation" className={'sidebar'+(mobileOpen?' mobile-open':'')}><Brand/><nav>{items.map(([name,p])=><button aria-current={(p==='/'?current==='/':current.startsWith(p))?'page':undefined} className={(p==='/'?current==='/':current.startsWith(p))?'active':''} onClick={()=>{navigate(p);onNavigate?.()}} key={p}><span aria-hidden="true">{name[0]}</span>{name}</button>)}</nav><div className="sidebar-bottom"><small>{admin?'SRCcvde team':'Client workspace'}</small><button onClick={onSignOut}>Sign out</button></div></aside>
-}
-
-function AdminOverview({profile,navigate}:{profile:Profile|null;navigate:(p:string)=>void}){
- const[inquiries,setInquiries]=useState<Inquiry[]>([]),[clients,setClients]=useState(0),[projects,setProjects]=useState(0),[pendingDocs,setPendingDocs]=useState(0),[blockedMilestones,setBlockedMilestones]=useState(0),[archiveIssues,setArchiveIssues]=useState(0),[overdueMilestones,setOverdueMilestones]=useState(0),[overdueInvoices,setOverdueInvoices]=useState(0),[failedNotifications,setFailedNotifications]=useState(0),[loading,setLoading]=useState(true)
- useEffect(()=>{Promise.all([
-  supabase.from('project_inquiries').select('*').order('created_at',{ascending:false}).limit(6),
-  supabase.from('clients').select('*',{count:'exact',head:true}).in('status',['onboarding','active']),
-  supabase.from('projects').select('*',{count:'exact',head:true}).in('status',['planning','active','launching']),
-  supabase.from('signature_requests').select('*',{count:'exact',head:true}).eq('status','pending'),
-  supabase.from('project_milestones').select('*',{count:'exact',head:true}).eq('status','blocked'),
-  supabase.from('executed_document_artifacts').select('*',{count:'exact',head:true}).eq('drive_sync_status','failed'),
-  supabase.from('project_milestones').select('*',{count:'exact',head:true}).lt('due_at',new Date().toISOString()).neq('status','completed'),
-  supabase.from('billing_invoices').select('*',{count:'exact',head:true}).in('status',['sent','overdue']).lt('due_at',new Date().toISOString()),
-  supabase.from('notification_outbox').select('*',{count:'exact',head:true}).eq('status','failed')
- ]).then(([i,c,p,d,m,a,o,b,n])=>{setInquiries((i.data||[]) as Inquiry[]);setClients(c.count||0);setProjects(p.count||0);setPendingDocs(d.count||0);setBlockedMilestones(m.count||0);setArchiveIssues(a.count||0);setOverdueMilestones(o.count||0);setOverdueInvoices(b.count||0);setFailedNotifications(n.count||0);setLoading(false)})},[])
- const first=profile?.full_name?' '+profile.full_name.split(' ')[0]:'',newLeads=inquiries.filter(x=>x.status==='new').length
- const attentionTotal=pendingDocs+blockedMilestones+archiveIssues+overdueMilestones+overdueInvoices+failedNotifications
- return <><header className="topbar"><div><p className="eyebrow">Command center</p><h1>Good to see you{first}.</h1></div><span className="live-dot">Live workspace</span></header>
- <section className="metric-grid"><article><small>New inquiries</small><strong>{loading?'—':newLeads}</strong><span>recent queue</span></article><article><small>Active clients</small><strong>{loading?'—':clients}</strong><span>onboarding + active</span></article><article><small>Active projects</small><strong>{loading?'—':projects}</strong><span>current workspaces</span></article><article className={attentionTotal?'metric-attention':''}><small>Needs attention</small><strong>{loading?'—':attentionTotal}</strong><span>{attentionTotal?'operational items':'all systems clear'}</span></article></section>
- <section className="command-attention"><div className="section-head"><div><p className="eyebrow">Attention center</p><h2>{loading?'Checking the workspace…':attentionTotal?attentionTotal+' item'+(attentionTotal===1?'':'s')+' worth a look':'Workspace is clear.'}</h2></div><span className={'attention-health '+(attentionTotal?'needs-work':'clear')}>{attentionTotal?'Review queue':'All clear'}</span></div><div className="attention-grid expanded"><button onClick={()=>navigate('/documents?view=pending')}><small>Pending signatures</small><strong>{loading?'—':pendingDocs}</strong><span>{pendingDocs?'Open signing room →':'Nothing waiting'}</span></button><button onClick={()=>navigate('/projects?view=blocked')}><small>Blocked milestones</small><strong>{loading?'—':blockedMilestones}</strong><span>{blockedMilestones?'Review delivery →':'Roadmaps clear'}</span></button><button onClick={()=>navigate('/projects?view=overdue')}><small>Overdue milestones</small><strong>{loading?'—':overdueMilestones}</strong><span>{overdueMilestones?'Review schedule →':'Schedule clear'}</span></button><button onClick={()=>navigate('/billing')}><small>Overdue invoices</small><strong>{loading?'—':overdueInvoices}</strong><span>{overdueInvoices?'Open billing →':'Accounts current'}</span></button><button onClick={()=>navigate('/documents?view=attention')}><small>Archive attention</small><strong>{loading?'—':archiveIssues}</strong><span>{archiveIssues?'Review failed sync →':'Archive healthy'}</span></button><button onClick={()=>navigate('/notifications')}><small>Notification failures</small><strong>{loading?'—':failedNotifications}</strong><span>{failedNotifications?'Review delivery →':'Delivery healthy'}</span></button></div></section>
- <section className="panel"><div className="section-head"><div><p className="eyebrow">CRM</p><h2>Latest inquiries</h2></div><button className="ghost" onClick={()=>navigate('/leads')}>View pipeline →</button></div>{loading?<p className="muted">Loading inquiries…</p>:inquiries.length===0?<Empty>No inquiries yet.</Empty>:<div className="lead-list">{inquiries.map(x=><button className="lead-row" key={x.id} onClick={()=>navigate('/leads/'+x.id)}><Avatar name={x.name}/><div><b>{x.name}</b><small>{x.company||x.email}</small></div><span>{x.project_type}</span><StatusPill value={x.status}/></button>)}</div>}</section></>
-}
-function LeadsPage({navigate}:{navigate:(p:string)=>void}){
- const[leads,setLeads]=useState<Inquiry[]>([]),[loading,setLoading]=useState(true),[query,setQuery]=useState(''),[stage,setStage]=useState('all')
- useEffect(()=>{supabase.from('project_inquiries').select('*').order('created_at',{ascending:false}).then(({data})=>{setLeads((data||[]) as Inquiry[]);setLoading(false)})},[])
- const visibleLeads=leads.filter(x=>{const q=query.trim().toLowerCase();const matchesStage=stage==='all'||x.status===stage||(stage==='closed'&&['won','lost','archived'].includes(x.status));return matchesStage&&(!q||[x.name,x.company,x.email,x.project_type,x.details].some(v=>(v||'').toLowerCase().includes(q)))})
- return <><PageTitle eyebrow="CRM" title="Leads" copy="Every project inquiry, from first hello to signed client."/><section className="panel lead-tools"><div className="directory-tools"><label>Search pipeline<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Name, company, email, or project…"/></label><label>Stage<select value={stage} onChange={e=>setStage(e.target.value)}><option value="all">All stages</option>{leadStatuses.slice(0,5).map(s=><option key={s} value={s}>{label(s)}</option>)}<option value="closed">Closed & archived</option></select></label><span className="directory-count">{visibleLeads.length} of {leads.length}</span></div></section><div className="pipeline">{leadStatuses.slice(0,5).map(status=><section className="pipeline-col" key={status}><div className="pipeline-head"><b>{label(status)}</b><span>{visibleLeads.filter(x=>x.status===status).length}</span></div>{visibleLeads.filter(x=>x.status===status).map(x=><button className="lead-card" key={x.id} onClick={()=>navigate('/leads/'+x.id)}><div><Avatar name={x.name}/><span><b>{x.name}</b><small>{x.company||x.project_type}</small></span></div><p>{x.details}</p><footer><small>{date(x.created_at)}</small><small>{x.budget_range}</small></footer></button>)}{!loading&&!visibleLeads.some(x=>x.status===status)&&<div className="pipeline-empty">Nothing here</div>}</section>)}</div>
- <section className="panel"><div className="section-head"><h2>Closed & archived</h2><span className="status">{visibleLeads.filter(x=>['won','lost','archived'].includes(x.status)).length}</span></div><div className="compact-list">{visibleLeads.filter(x=>['won','lost','archived'].includes(x.status)).map(x=><button key={x.id} onClick={()=>navigate('/leads/'+x.id)}><span>{x.name}</span><StatusPill value={x.status}/></button>)}</div></section></>
-}
-
-function LeadDetail({id,navigate}:{id:string;navigate:(p:string)=>void}){
- const[lead,setLead]=useState<Inquiry|null>(null),[notes,setNotes]=useState<Note[]>([]),[activity,setActivity]=useState<Activity[]>([]),[note,setNote]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState('')
- const load=async()=>{const[l,n,a]=await Promise.all([supabase.from('project_inquiries').select('*').eq('id',id).single(),supabase.from('lead_notes').select('id,body,created_at').eq('inquiry_id',id).order('created_at',{ascending:false}),supabase.from('crm_activity').select('*').eq('entity_type','lead').eq('entity_id',id).order('created_at',{ascending:false})]);setLead(l.data as Inquiry);setNotes((n.data||[]) as Note[]);setActivity((a.data||[]) as Activity[])}
- useEffect(()=>{load()},[id])
- async function changeStatus(status:string){if(!lead)return;setBusy(true);const{error}=await supabase.from('project_inquiries').update({status}).eq('id',id);setBusy(false);if(error)setMessage(error.message);else load()}
- async function addNote(e:FormEvent){e.preventDefault();if(!note.trim())return;setBusy(true);const{error}=await supabase.from('lead_notes').insert({inquiry_id:id,body:note.trim()});setBusy(false);if(error)setMessage(error.message);else{setNote('');load()}}
- async function inviteApplicant(){setBusy(true);setMessage('');const{data,error}=await supabase.functions.invoke('invite-applicant',{body:{inquiry_id:id}});setBusy(false);setMessage(error?error.message:(data?.invitation_sent?'Applicant portal invitation sent.':'Applicant account linked.'));if(!error)load()}
- async function convert(){if(!lead)return;setBusy(true);setMessage('');const{data,error}=await supabase.rpc('convert_lead_to_client',{p_inquiry_id:id});setBusy(false);if(error)setMessage(error.message);else navigate('/clients/'+data)}
- if(!lead)return <p className="muted">Loading lead…</p>
- return <><button className="back" onClick={()=>navigate('/leads')}>← Leads</button><header className="detail-head"><div className="identity"><Avatar name={lead.name}/><div><p className="eyebrow">Lead</p><h1>{lead.name}</h1><p>{lead.company||lead.email}</p></div></div><div className="detail-actions"><select value={lead.status} disabled={busy} onChange={e=>changeStatus(e.target.value)}>{leadStatuses.map(s=><option key={s} value={s}>{label(s)}</option>)}</select><button className="ghost" disabled={busy} onClick={inviteApplicant}>Invite to applicant portal</button>{lead.status!=='won'&&<button className="primary inline" disabled={busy} onClick={convert}>Convert to client</button>}</div></header>
- {message&&<p className="success-message">{message}</p>}<div className="detail-grid"><section className="panel flush"><p className="eyebrow">Project brief</p><div className="facts"><Fact k="Email" v={lead.email}/><Fact k="Project type" v={lead.project_type}/><Fact k="Budget" v={lead.budget_range}/><Fact k="Timeline" v={lead.timeline}/><Fact k="Involvement" v={lead.involvement}/><Fact k="Received" v={date(lead.created_at)}/></div><div className="brief"><small>What they want to build</small><p>{lead.details}</p></div></section>
- <aside><section className="panel flush"><p className="eyebrow">Internal notes</p><form className="note-form" onSubmit={addNote}><textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Add a private note…" maxLength={5000}/><button className="primary" disabled={busy||!note.trim()}>Add note</button></form>{notes.map(n=><div className="note" key={n.id}><p>{n.body}</p><small>{date(n.created_at)}</small></div>)}</section><ActivityFeed rows={activity}/></aside></div></>
-}
-
-function ClientsPage({navigate}:{navigate:(p:string)=>void}){
- const[clients,setClients]=useState<Client[]>([]),[projects,setProjects]=useState<Project[]>([]),[milestones,setMilestones]=useState<Milestone[]>([]),[query,setQuery]=useState(''),[status,setStatus]=useState('all'),[loading,setLoading]=useState(true),[loadError,setLoadError]=useState(false)
- const load=async()=>{setLoading(true);setLoadError(false);try{const[c,p,m]=await Promise.all([supabase.from('clients').select('*').order('created_at',{ascending:false}),supabase.from('projects').select('*'),supabase.from('project_milestones').select('*')]);if(c.error||p.error||m.error)throw new Error();setClients((c.data||[]) as Client[]);setProjects((p.data||[]) as Project[]);setMilestones((m.data||[]) as Milestone[])}catch{setLoadError(true)}finally{setLoading(false)}};useEffect(()=>{void load()},[])
- const filtered=clients.filter(c=>(status==='all'||c.status===status)&&(!query.trim()||[c.name,c.primary_contact_name,c.primary_email].some(v=>(v||'').toLowerCase().includes(query.trim().toLowerCase()))))
- return <><PageTitle eyebrow="Relationships" title="Clients" copy="Accepted clients and the workspaces attached to them."/><section className="panel client-directory"><div className="directory-tools"><label className="client-search">Search clients<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Name, contact, or email…"/></label><label>Status<select value={status} onChange={e=>setStatus(e.target.value)}><option value="all">All clients</option><option value="onboarding">Onboarding</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="archived">Archived</option></select></label><span className="directory-count">{loading?'Loading…':`${filtered.length} of ${clients.length}`}</span></div><div className="client-list"><LoadState loading={loading} error={loadError?'Could not load clients. Try again.':null} onRetry={load} loadingText="Loading clients…"/>{!loading&&!loadError&&filtered.map(c=>{const cp=projects.filter(p=>p.client_id===c.id);const ids=new Set(cp.map(p=>p.id));const cm=milestones.filter(m=>ids.has(m.project_id));const blocked=cm.filter(m=>m.status==='blocked').length;const overdue=cm.filter(m=>m.due_at&&new Date(m.due_at).getTime()<Date.now()&&m.status!=='completed').length;return <button className="client-row" key={c.id} onClick={()=>navigate('/clients/'+c.id)}><Avatar name={c.name}/><div><b>{c.name}</b><small>{c.primary_contact_name} · {c.primary_email}{blocked?' · '+blocked+' blocked':''}{overdue?' · '+overdue+' overdue':''}</small></div><StatusPill value={c.status}/><span>Open →</span></button>})}{!loading&&!loadError&&(clients.length===0?<Empty>No clients yet. Convert a lead when you're ready.</Empty>:filtered.length===0&&<Empty>No clients match this search.</Empty>)}</div></section></>
-}
-
-function ClientDetail({id,navigate}:{id:string;navigate:(p:string)=>void}){
- const DRAFT_KEY='srccvde:admin-client-draft:'+id
- const readDraft=()=>{try{return JSON.parse(localStorage.getItem(DRAFT_KEY)||'{}') as Record<string,any>}catch{return {}}}
- const initialDraft=useMemo(()=>readDraft(),[id])
- const[client,setClient]=useState<(Client&{portal_unlocked?:boolean})|null>(null),[clientAccess,setClientAccess]=useState<'unlinked'|'active'|'suspended'>('unlinked'),[projects,setProjects]=useState<Project[]>([]),[clientMilestones,setClientMilestones]=useState<Milestone[]>([]),[docs,setDocs]=useState<DocumentRow[]>([]),[comms,setComms]=useState<Communication[]>([]),[activity,setActivity]=useState<Activity[]>([]),[requests,setRequests]=useState<SignatureRequest[]>([]),[actions,setActions]=useState<ClientAction[]>([]),[deliverables,setDeliverables]=useState<any[]>([]),[fileView,setFileView]=useState(initialDraft.fileView||'all'),[selectedDeliveryProject,setSelectedDeliveryProject]=useState(initialDraft.selectedDeliveryProject||''),[selectedWorkProject,setSelectedWorkProject]=useState(initialDraft.selectedWorkProject||''),[fileQuery,setFileQuery]=useState(initialDraft.fileQuery||''),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[downloadUrl,setDownloadUrl]=useState('')
- const[docName,setDocName]=useState(initialDraft.docName||''),[docCategory,setDocCategory]=useState(initialDraft.docCategory||'agreement'),[docKind,setDocKind]=useState(initialDraft.docKind||'signature'),[docContent,setDocContent]=useState(initialDraft.docContent||''),[docTemplate,setDocTemplate]=useState(initialDraft.docTemplate||'service-agreement'),[wizardOpen,setWizardOpen]=useState(Boolean(initialDraft.wizardOpen)),[wizardBase,setWizardBase]=useState(initialDraft.wizardBase||''),[wizardAnswers,setWizardAnswers]=useState<Record<string,string>>(initialDraft.wizardAnswers||{}),[templateView,setTemplateView]=useState(initialDraft.templateView||'all'),[favoriteTemplates,setFavoriteTemplates]=useState<string[]>(()=>{try{return JSON.parse(localStorage.getItem('srccvde-template-favorites')||'[]')}catch{return[]}}),[recentTemplates,setRecentTemplates]=useState<string[]>(()=>{try{return JSON.parse(localStorage.getItem('srccvde-template-recent')||'[]')}catch{return[]}}),[commSubject,setCommSubject]=useState(initialDraft.commSubject||''),[commBody,setCommBody]=useState(initialDraft.commBody||''),[commChannel,setCommChannel]=useState(initialDraft.commChannel||'portal'),[actionTitle,setActionTitle]=useState(initialDraft.actionTitle||''),[actionDescription,setActionDescription]=useState(initialDraft.actionDescription||''),[actionType,setActionType]=useState(initialDraft.actionType||'review'),[actionDue,setActionDue]=useState(initialDraft.actionDue||''),[deliveryName,setDeliveryName]=useState(initialDraft.deliveryName||''),[deliveryDescription,setDeliveryDescription]=useState(initialDraft.deliveryDescription||''),[deliveryCategory,setDeliveryCategory]=useState(initialDraft.deliveryCategory||'deliverable'),[deliveryFile,setDeliveryFile]=useState<File|null>(null)
- const load=async()=>{const[c,p,d,m,a,s,x,y]=await Promise.all([supabase.from('clients').select('*').eq('id',id).single(),supabase.from('projects').select('*').eq('client_id',id).order('created_at'),supabase.from('client_documents').select('*').eq('client_id',id).order('created_at',{ascending:false}),supabase.from('client_communications').select('*').eq('client_id',id).order('created_at',{ascending:false}),supabase.from('crm_activity').select('*').eq('entity_type','client').eq('entity_id',id).order('created_at',{ascending:false}),supabase.from('signature_requests').select('*').eq('client_id',id).order('requested_at',{ascending:false}),supabase.from('client_action_requests').select('*').eq('client_id',id).order('created_at',{ascending:false}),supabase.from('project_deliverables').select('*').eq('client_id',id).order('created_at',{ascending:false})]);setClient(c.data as Client&{portal_unlocked?:boolean});const projectRows=(p.data||[]) as Project[];setProjects(projectRows);if(projectRows.length){const{data:ms}=await supabase.from('project_milestones').select('*').in('project_id',projectRows.map(x=>x.id));setClientMilestones((ms||[]) as Milestone[])}else setClientMilestones([]);setDocs((d.data||[]) as DocumentRow[]);setComms((m.data||[]) as Communication[]);setActivity((a.data||[]) as Activity[]);setRequests((s.data||[]) as SignatureRequest[]);setActions((x.data||[]) as ClientAction[]);setDeliverables(y.data||[]);const{data:cm}=await supabase.from('client_memberships').select('user_id').eq('client_id',id).limit(1).maybeSingle();if(cm?.user_id){const{data:am}=await supabase.from('app_memberships').select('status').eq('user_id',cm.user_id).maybeSingle();setClientAccess(am?.status==='active'?'active':'suspended')}else setClientAccess('unlinked')}
- useEffect(()=>{load();const timer=window.setInterval(()=>{supabase.from('client_communications').select('*').eq('client_id',id).order('created_at',{ascending:false}).then(({data})=>{if(data)setComms(data as Communication[])})},3000);return()=>window.clearInterval(timer)},[id])
- useEffect(()=>{const draft={fileView,selectedDeliveryProject,selectedWorkProject,fileQuery,docName,docCategory,docKind,docContent,docTemplate,wizardOpen,wizardBase,wizardAnswers,templateView,commSubject,commBody,commChannel,actionTitle,actionDescription,actionType,actionDue,deliveryName,deliveryDescription,deliveryCategory};const hasDraft=Boolean(docName||docContent||wizardOpen||commSubject||commBody||actionTitle||actionDescription||actionDue||deliveryName||deliveryDescription||fileQuery);try{if(hasDraft)localStorage.setItem(DRAFT_KEY,JSON.stringify(draft));else localStorage.removeItem(DRAFT_KEY)}catch{}},[DRAFT_KEY,fileView,selectedDeliveryProject,selectedWorkProject,fileQuery,docName,docCategory,docKind,docContent,docTemplate,wizardOpen,wizardBase,wizardAnswers,templateView,commSubject,commBody,commChannel,actionTitle,actionDescription,actionType,actionDue,deliveryName,deliveryDescription,deliveryCategory])
- useEffect(()=>{const preferred=projects.find(p=>!['completed','archived'].includes(p.status))?.id||projects[0]?.id||'';if(!selectedDeliveryProject&&preferred)setSelectedDeliveryProject(preferred);if(!selectedWorkProject&&preferred)setSelectedWorkProject(preferred)},[projects,selectedDeliveryProject,selectedWorkProject])
- async function invite(){setBusy(true);setMessage('');const{data,error}=await supabase.functions.invoke('invite-client',{body:{client_id:id}});setBusy(false);setMessage(error?error.message:(data?.invitation_sent?'Portal invitation sent.':'Client account linked.'));if(!error)load()}
- async function changeClientStatus(status:string){if(!client)return;setBusy(true);setMessage('');const{error}=await supabase.from('clients').update({status,updated_at:new Date().toISOString()}).eq('id',id);setBusy(false);if(error)setMessage(error.message);else{setMessage(status==='inactive'?'Client marked inactive and removed from the active dashboard count.':'Client status updated to '+label(status)+'.');load()}}
- async function setPortalAccess(enabled:boolean){if(clientAccess==='unlinked')return;if(!confirm(enabled?'Restore this client’s workspace access?':'Lock this client out of SRCcvde? They will no longer be able to access their client workspace or client data.'))return;setBusy(true);setMessage('');const{error}=await supabase.rpc('set_client_portal_access',{p_client_id:id,p_enabled:enabled});setBusy(false);if(error)setMessage(error.message);else{setMessage(enabled?'Client workspace access restored.':'Client locked out of SRCcvde.');load()}}
- function selectDocumentTemplate(templateId:string){setDocTemplate(templateId);setWizardOpen(false);setWizardBase('');setWizardAnswers({})}
- function toggleFavoriteTemplate(templateId:string){setFavoriteTemplates(current=>{const next=current.includes(templateId)?current.filter(id=>id!==templateId):[templateId,...current];try{localStorage.setItem('srccvde-template-favorites',JSON.stringify(next))}catch{}return next})}
- function rememberTemplate(templateId:string){setRecentTemplates(current=>{const next=[templateId,...current.filter(id=>id!==templateId)].slice(0,5);try{localStorage.setItem('srccvde-template-recent',JSON.stringify(next))}catch{}return next})}
- const quickTemplates=templateView==='favorites'?favoriteTemplates.map(id=>documentTemplates.find(t=>t.id===id)).filter(Boolean) as DocumentTemplate[]:templateView==='recent'?recentTemplates.map(id=>documentTemplates.find(t=>t.id===id)).filter(Boolean) as DocumentTemplate[]:templateView==='all'?documentTemplates:documentTemplates.filter(t=>t.category===templateView)
- function startTemplateWizard(){const template=documentTemplates.find(t=>t.id===docTemplate),project=projects.find(p=>p.id===selectedWorkProject);if(!template)return;if(!project){setMessage('Choose a project before starting a guided document.');return}rememberTemplate(template.id);const ctx:TemplateContext={clientName:client?.name||'Client',clientContact:client?.primary_contact_name||'Client contact',clientEmail:client?.primary_email||'Email unavailable',projectName:project.name,projectType:project.project_type||'Custom technology project',projectPhase:label(project.phase),today:new Intl.DateTimeFormat(undefined,{month:'long',day:'numeric',year:'numeric'}).format(new Date())};const content=template.buildContent(ctx),questions=[...content.matchAll(/\[REQUIRED:\s*([^\]]+)\]/g)].map(match=>match[1].trim());setDocName(template.documentName+' — '+project.name);setDocCategory(template.category);setDocKind(template.signatureKind);setWizardBase(content);setWizardAnswers({});if(!questions.length){setDocContent(content);setWizardOpen(false);setMessage('Template generated. Review and edit the document before sending.');return}setWizardOpen(true);setMessage('Guided draft ready. Answer '+questions.length+' required question'+(questions.length===1?'':'s')+' to generate the editable document.')}
- function generateWizardDraft(){const questions=[...wizardBase.matchAll(/\[REQUIRED:\s*([^\]]+)\]/g)].map(match=>match[1].trim()),missing=questions.filter(q=>!wizardAnswers[q]?.trim());if(missing.length){setMessage('Answer all '+missing.length+' remaining required question'+(missing.length===1?'':'s')+' before generating the draft.');return}let content=wizardBase;questions.forEach(q=>{content=content.replace('[REQUIRED: '+q+']',wizardAnswers[q].trim())});setDocContent(content);setWizardOpen(false);setMessage('Editable document generated. Review or change any wording before sending.')}
- function cancelTemplateWizard(){setWizardOpen(false);setWizardBase('');setWizardAnswers({});setMessage('Guided draft closed. No document was sent.')}
-  async function createDocument(e:FormEvent){e.preventDefault();const project=projects.find(p=>p.id===selectedWorkProject);if(!project)return setMessage('Choose a project first.');const unresolved=(docContent.match(/\[REQUIRED:[^\]]*\]/g)||[]);if(unresolved.length)return setMessage('Complete all '+unresolved.length+' required template field'+(unresolved.length===1?'':'s')+' before sending. Search the document for [REQUIRED:.');setBusy(true);setMessage('');const{error}=await supabase.rpc('create_signable_document',{p_client_id:id,p_project_id:project.id,p_name:docName,p_category:docCategory,p_content:docContent,p_signature_kind:docKind});setBusy(false);if(error)setMessage(error.message);else{setDocName('');setDocContent('');setMessage('Document sent to the client workspace.');await supabase.functions.invoke('dispatch-notifications');load()}}
- async function countersign(documentId:string){const legalName=prompt('Type your legal name to countersign this exact document version.');if(!legalName)return;setBusy(true);setMessage('');setDownloadUrl('');const{error}=await supabase.rpc('countersign_document',{p_document_id:documentId,p_legal_name:legalName});if(error){setBusy(false);setMessage(error.message);return}const{data,error:finalError}=await supabase.functions.invoke('finalize-executed-document',{body:{document_id:documentId}});setBusy(false);if(finalError){let detail=finalError.message;try{const response=(finalError as any).context as Response|undefined;if(response){const body=await response.clone().json();detail=body?.detail||body?.error||detail}}catch{}setMessage('Fully executed and saved in SRCcvde. The external archive needs attention: '+detail)}else{const driveStatus=data?.drive?.status||data?.artifact?.drive_sync_status;setMessage(driveStatus==='synced'?'Fully executed and archived to Google Drive.':driveStatus==='failed'?'Fully executed and saved in SRCcvde. Google Drive needs to be reconnected before the Drive copy can sync.':'Fully executed. Secure PDF generated; Google Drive is not connected yet.');setDownloadUrl(data?.download_url||'')}await supabase.functions.invoke('dispatch-notifications');load()}
- async function retryArchive(documentId:string){setBusy(true);setMessage('');setDownloadUrl('');const{data,error}=await supabase.functions.invoke('finalize-executed-document',{body:{document_id:documentId}});setBusy(false);if(error){let detail=error.message;try{const response=(error as any).context as Response|undefined;if(response){const body=await response.clone().json();detail=body?.detail||body?.error||detail}}catch{}setMessage('Secure PDF archive needs attention: '+detail)}else{const driveStatus=data?.drive?.status||data?.artifact?.drive_sync_status;setMessage(driveStatus==='synced'?'Executed PDF generated and archived to Google Drive.':driveStatus==='failed'?'Executed PDF is safely stored in SRCcvde. Reconnect Google Drive to restore the Drive copy.':'Executed PDF is safely stored in SRCcvde. Google Drive is not connected yet.');setDownloadUrl(data?.download_url||'')}load()}
- async function createClientAction(e:FormEvent){e.preventDefault();if(!actionTitle.trim())return;setBusy(true);setMessage('');const{data:{user}}=await supabase.auth.getUser();const{error}=await supabase.from('client_action_requests').insert({client_id:id,project_id:selectedWorkProject||null,title:actionTitle.trim(),description:actionDescription.trim()||null,action_type:actionType,status:'open',due_at:actionDue?new Date(actionDue+'T12:00:00').toISOString():null,client_visible:true,created_by:user?.id||null});setBusy(false);if(error)setMessage(error.message);else{setActionTitle('');setActionDescription('');setActionDue('');setMessage('Client action created.');await supabase.functions.invoke('dispatch-notifications');load()}}
- async function closeClientAction(a:ClientAction){setBusy(true);setMessage('');const{error}=await supabase.from('client_action_requests').update({status:'completed',completed_at:new Date().toISOString()}).eq('id',a.id);setBusy(false);if(error)setMessage(error.message);else{setMessage('Client action completed.');load()}}
- async function uploadDeliverable(e:FormEvent){e.preventDefault();const project=projects.find(p=>p.id===selectedDeliveryProject)||projects[0];if(!project||!deliveryFile)return setMessage('Choose a project file first.');const validation=validateProjectFile(deliveryFile);if(validation)return setMessage(validation);setBusy(true);setMessage('');const{data:{user}}=await supabase.auth.getUser();const safe=deliveryFile.name.replace(/[^a-zA-Z0-9._-]/g,'_');const path=id+'/'+project.id+'/srccvde/'+Date.now()+'-'+safe;const{error:uploadError}=await supabase.storage.from('project-deliverables').upload(path,deliveryFile,{contentType:deliveryFile.type||undefined,upsert:false});if(uploadError){setBusy(false);setMessage(uploadError.message);return}const{error}=await supabase.from('project_deliverables').insert({client_id:id,project_id:project.id,name:deliveryName.trim()||deliveryFile.name,description:deliveryDescription.trim()||null,storage_bucket:'project-deliverables',storage_path:path,file_name:deliveryFile.name,mime_type:deliveryFile.type||null,byte_size:deliveryFile.size,version:1,client_visible:true,created_by:user?.id||null,source:'srccvde',category:deliveryCategory});setBusy(false);if(error){await supabase.storage.from('project-deliverables').remove([path]);setMessage(error.message);return}setDeliveryName('');setDeliveryDescription('');setDeliveryFile(null);setMessage('Deliverable shared with client.');const{data:members}=await supabase.from('client_memberships').select('user_id').eq('client_id',id);await Promise.all((members||[]).map(member=>supabase.functions.invoke('send-push-notification',{body:{user_id:member.user_id,category:'project_updates',title:'New project file from SRCcvde',body:(deliveryName.trim()||deliveryFile.name)+' is ready in '+project.name+'.',url:'/deliverables',tag:'project-delivery-'+project.id}})));load()}
- async function openDeliverable(item:any){const{data,error}=await supabase.functions.invoke('project-file-download',{body:{deliverable_id:item.id}});if(error||!data?.url){setMessage(error?.message||'Could not open file.');return}window.open(data.url,'_blank','noopener,noreferrer')}
- async function replaceDeliverable(item:any){const input=document.createElement('input');input.type='file';input.accept='.pdf,.png,.jpg,.jpeg,.webp,.svg,.zip,.doc,.docx,.xls,.xlsx,.csv,.txt,.md';input.onchange=async()=>{const file=input.files?.[0];if(!file)return;const validation=validateProjectFile(file);if(validation){setMessage(validation);return}setBusy(true);setMessage('');const{data:latest}=await supabase.from('project_deliverables').select('version').eq('client_id',item.client_id).eq('project_id',item.project_id).eq('source','srccvde').eq('name',item.name).order('version',{ascending:false}).limit(1).maybeSingle();const nextVersion=(latest?.version||item.version||1)+1;const safe=file.name.replace(/[^a-zA-Z0-9._-]/g,'_');const path=item.client_id+'/'+item.project_id+'/srccvde/'+Date.now()+'-'+safe;const{error:uploadError}=await supabase.storage.from('project-deliverables').upload(path,file,{contentType:file.type||undefined,upsert:false});if(uploadError){setBusy(false);setMessage(uploadError.message);return}const{data:{user}}=await supabase.auth.getUser();const{error}=await supabase.from('project_deliverables').insert({client_id:item.client_id,project_id:item.project_id,name:item.name,description:item.description,storage_bucket:'project-deliverables',storage_path:path,file_name:file.name,mime_type:file.type||null,byte_size:file.size,version:nextVersion,replaces_deliverable_id:item.id,client_visible:item.client_visible,created_by:user?.id||null,source:'srccvde',category:item.category||'deliverable'});if(error){await supabase.storage.from('project-deliverables').remove([path]);setBusy(false);setMessage(error.message);return}const project=projects.find(p=>p.id===item.project_id);const{data:members}=await supabase.from('client_memberships').select('user_id').eq('client_id',item.client_id);await Promise.all((members||[]).map(member=>supabase.functions.invoke('send-push-notification',{body:{user_id:member.user_id,category:'project_updates',title:'Updated project file from SRCcvde',body:item.name+' v'+nextVersion+' is ready'+(project?' in '+project.name:'')+'.',url:'/deliverables',tag:'project-file-version-'+item.project_id}})));setBusy(false);setMessage('Version '+nextVersion+' uploaded. Previous version retained.');load()};input.click()}
- async function toggleDeliverableVisibility(item:any){setBusy(true);setMessage('');const next=!item.client_visible;const{error}=await supabase.from('project_deliverables').update({client_visible:next}).eq('id',item.id);setBusy(false);if(error)setMessage(error.message);else{setMessage(next?'File is visible to the client.':'File hidden from the client.');load()}}
- async function deleteDeliverable(item:any){if(!confirm('Delete "'+item.name+'" permanently? This removes the stored file too.'))return;setBusy(true);setMessage('');const{error:storageError}=await supabase.storage.from(item.storage_bucket).remove([item.storage_path]);if(storageError){setBusy(false);setMessage(storageError.message);return}const{error}=await supabase.from('project_deliverables').delete().eq('id',item.id);setBusy(false);if(error)setMessage('Stored file was removed, but its record needs cleanup: '+error.message);else{setMessage('File deleted.');load()}}
- async function logCommunication(e:FormEvent){e.preventDefault();if(!commBody.trim())return;if(commChannel==='email'&&!commSubject.trim()){setMessage('Add a subject before sending an email.');return}setBusy(true);setMessage('');if(commChannel==='email'){const{data,error}=await supabase.functions.invoke('send-client-email',{body:{client_id:id,project_id:selectedWorkProject||null,subject:commSubject.trim(),body:commBody.trim()}});setBusy(false);if(error){let detail=error.message;try{const response=(error as any).context as Response|undefined;if(response){const body=await response.clone().json();detail=body?.error||detail}}catch{}setMessage(detail);return}setCommSubject('');setCommBody('');setMessage('Email sent to '+(data?.to||client?.primary_email||'client')+'.');load();return}const{data:{user}}=await supabase.auth.getUser();const{error}=await supabase.from('client_communications').insert({client_id:id,project_id:selectedWorkProject||null,channel:commChannel,direction:'outbound',subject:commSubject.trim()||null,body:commBody.trim(),created_by:user?.id||null});setBusy(false);if(error)setMessage(error.message);else{setCommSubject('');setCommBody('');setMessage('Client communication logged.');load()}}
- if(!client)return <p className="muted">Loading client…</p>
- const requestFor=(documentId:string)=>requests.find(r=>r.document_id===documentId&&r.signer_side==='client')
- const visibleDeliverables=deliverables.filter(item=>{const q=fileQuery.trim().toLowerCase();return(fileView==='all'||item.source===fileView)&&(!selectedDeliveryProject||item.project_id===selectedDeliveryProject)&&(!q||[item.name,item.file_name,item.description,item.category].some(v=>(v||'').toLowerCase().includes(q)))})
- return <><button className="back" onClick={()=>navigate('/clients')}>← Clients</button><header className="detail-head"><div className="identity"><Avatar name={client.name}/><div><p className="eyebrow">Client record</p><h1>{client.name}</h1><p>{client.primary_contact_name} · {client.primary_email}</p></div></div><div className="detail-actions"><button className="ghost" onClick={()=>navigate('/handoffs/'+id)}>Handoff →</button><label>Client status<select value={client.status} disabled={busy} onChange={e=>changeClientStatus(e.target.value)}><option value="onboarding">Onboarding</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="complete">Complete</option><option value="archived">Archived</option></select></label><StatusPill value={client.status}/>{clientAccess==='active'&&<button className="ghost" disabled={busy} onClick={()=>setPortalAccess(false)}>Lock client out</button>}{clientAccess==='suspended'&&<button className="primary inline" disabled={busy} onClick={()=>setPortalAccess(true)}>Restore access</button>}{clientAccess==='unlinked'&&<button className="primary inline" disabled={busy} onClick={invite}>{busy?'Working…':'Invite / link portal'}</button>}</div></header>{message&&<p className="success-message">{message}{downloadUrl&&<> · <a href={downloadUrl} target="_blank" rel="noreferrer">Download executed PDF</a></>}</p>}
- <section className="record-grid"><RecordCard title="Projects" count={projects.length} detail={projects.length===1?projects[0].name:projects.length>1?'Multiple active workspaces':'No projects'}/><RecordCard title="Documents" count={docs.length} detail={client.drive_folder_id?'Drive connected':'Drive archive pending'}/><RecordCard title="Communications" count={comms.length} detail="Client history"/><RecordCard title="Portal" count={client.portal_unlocked?1:0} detail={client.portal_unlocked?'Full workspace unlocked':'Pre-project experience'}/></section>
- {projects.length>1&&<section className="panel admin-project-context"><div><p className="eyebrow">Working project</p><h2>Target the right workspace</h2><p className="muted">Documents, action requests and communications created below will attach to this project.</p></div><label>Project<select value={selectedWorkProject} onChange={e=>setSelectedWorkProject(e.target.value)}>{projects.map(p=><option value={p.id} key={p.id}>{p.name} · {label(p.status)}</option>)}</select></label></section>}
- <div className="detail-grid"><section><section className="panel flush"><div className="section-head"><div><p className="eyebrow">Projects</p><h2>Workspace</h2></div><button className="ghost" onClick={()=>navigate('/projects')}>Manage delivery →</button></div>{projects.map(p=>{const pm=clientMilestones.filter(m=>m.project_id===p.id);const complete=pm.filter(m=>m.status==='completed').length;const progress=pm.length?Math.round((complete/pm.length)*100):p.progress;const blocked=pm.filter(m=>m.status==='blocked').length;const overdue=pm.filter(m=>m.due_at&&new Date(m.due_at).getTime()<Date.now()&&m.status!=='completed').length;return <div className="project-row" key={p.id}><div><b>{p.name}</b><small>{label(p.phase)} · {p.project_type}{pm.length?' · '+complete+'/'+pm.length+' milestones':''}{blocked?' · '+blocked+' blocked':''}{overdue?' · '+overdue+' overdue':''}</small></div><div className="progress"><i style={{width:progress+'%'}}/></div><strong>{progress}%</strong><StatusPill value={p.status}/></div>})}</section>
- <section className="panel"><div className="section-head"><div><p className="eyebrow">Documents</p><h2>Signing room</h2></div><span className="status">{docs.length}</span></div>{docs.length?docs.map(d=>{const req=requestFor(d.id);return <div className="doc-row signable-row" key={d.id}><div><b>{d.name}</b><small>{label(d.category)} · {req?label(req.status):label(d.state)}</small></div>{req?.status==='signed'&&d.state!=='final'&&d.signature_kind!=='acknowledgment'?<button className="ghost" disabled={busy} onClick={()=>countersign(d.id)}>Countersign & finalize</button>:d.state==='final'&&!d.executed_artifact_id?<button className="ghost" disabled={busy} onClick={()=>retryArchive(d.id)}>{busy?'Working…':'Generate & archive PDF'}</button>:<StatusPill value={d.state}/>}</div>}):<Empty>No documents yet.</Empty>}</section>
- <section className="panel"><div className="section-head"><div><p className="eyebrow">Client actions</p><h2>Action center</h2><p className="section-copy">Create clear reviews, decisions and requests that appear in the client workspace.</p></div><span className="status">{actions.filter(a=>a.status!=='completed').length} open</span></div><form className="document-form" onSubmit={createClientAction}><label>Action title<input value={actionTitle} onChange={e=>setActionTitle(e.target.value)} placeholder="Review homepage direction" required maxLength={160}/></label><div className="form-split"><label>Type<select value={actionType} onChange={e=>setActionType(e.target.value)}><option value="review">Review</option><option value="approval">Approval</option><option value="decision">Decision</option><option value="information">Information request</option></select></label><label>Due date<input type="date" value={actionDue} onChange={e=>setActionDue(e.target.value)}/></label></div><label>Details<textarea value={actionDescription} onChange={e=>setActionDescription(e.target.value)} placeholder="What does the client need to review, decide, or provide?" maxLength={2000}/></label><button className="primary" disabled={busy||!actionTitle.trim()}>Add to client action center</button></form><div className="communication-history">{actions.slice(0,8).map(a=><article className="communication-row" key={a.id}><div className="communication-meta"><span className="communication-channel">{label(a.action_type)}</span><small>{a.due_at?'Due '+date(a.due_at):'No due date'}</small></div><div><b>{a.title}</b>{a.description&&<p>{a.description}</p>}</div>{a.status!=='completed'?<button className="ghost" disabled={busy} onClick={()=>closeClientAction(a)}>Complete</button>:<StatusPill value="completed"/>}</article>)}{!actions.length&&<div className="communication-empty"><b>No client actions yet</b><p>Requests you create here will appear in the client's Action Center.</p></div>}</div></section>
- <section className="panel"><div className="section-head"><div><p className="eyebrow">Project files</p><h2>Shared workspace</h2><p className="section-copy">Deliver finished work to the client and review files they have shared with SRCcvde.</p></div><span className="status">{deliverables.length}</span></div><form className="document-form" onSubmit={uploadDeliverable}><div className="form-split"><label>Project<select value={selectedDeliveryProject} onChange={e=>setSelectedDeliveryProject(e.target.value)} required><option value="">Select project</option>{projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label><label>Display name<input value={deliveryName} onChange={e=>setDeliveryName(e.target.value)} placeholder="Homepage assets"/></label></div><div className="form-split"><label>Category<select value={deliveryCategory} onChange={e=>setDeliveryCategory(e.target.value)}><option value="deliverable">Deliverable</option><option value="branding">Branding</option><option value="content">Content</option><option value="source">Source package</option><option value="document">Document</option><option value="other">Other</option></select></label></div><label>Client notes<textarea value={deliveryDescription} onChange={e=>setDeliveryDescription(e.target.value)} placeholder="What is included or what should the client know?"/></label><label>Choose file<input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.svg,.heic,.heif,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt,.md,.mp4,.mov" onChange={e=>setDeliveryFile(e.target.files?.[0]||null)} required/></label><button className="primary" disabled={busy||!deliveryFile||!projects.length}>{busy?'Uploading…':'Deliver to client'}</button></form><div className="directory-tools"><label>Search files<input value={fileQuery} onChange={e=>setFileQuery(e.target.value)} placeholder="Name, category, notes…"/></label><label>Show<select value={fileView} onChange={e=>setFileView(e.target.value)}><option value="all">All shared files</option><option value="client">Client uploads</option><option value="srccvde">SRCcvde deliveries</option></select></label><span className="directory-count">{visibleDeliverables.length} files</span></div><div className="communication-history">{visibleDeliverables.slice(0,24).map(item=><article className="communication-row" key={item.id}><div className="communication-meta"><span className="communication-channel">{item.source==='client'?'Client upload':'SRCcvde delivery'}</span><small>{label(item.category||'deliverable')} · v{item.version||1} · {date(item.created_at)}</small></div><div><b>{item.name}</b><p>{item.file_name}{item.description?' · '+item.description:''}</p></div><div className="detail-actions"><button className="ghost" onClick={()=>openDeliverable(item)}>Open</button>{item.source==='srccvde'&&<button className="ghost" disabled={busy} onClick={()=>replaceDeliverable(item)}>New version</button>}<button className="ghost" disabled={busy} onClick={()=>toggleDeliverableVisibility(item)}>{item.client_visible?'Hide':'Show'}</button><button className="ghost" disabled={busy} onClick={()=>deleteDeliverable(item)}>Delete</button></div></article>)}{!visibleDeliverables.length&&<div className="communication-empty"><b>No files in this view</b><p>Client uploads and SRCcvde deliverables will appear here together.</p></div>}</div></section>
- <section className="panel communications-panel"><div className="section-head"><div><p className="eyebrow">Communications</p><h2>Client history</h2><p className="section-copy">Keep a clean internal record of calls, emails, meetings and client updates.</p></div><span className="status">{comms.length}</span></div><form className="communication-form" onSubmit={logCommunication}><div className="communication-form-head"><div><b>{commChannel==='email'?'Send client email':'Log an interaction'}</b><small>{commChannel==='email'?'Sends from hello@srccvde.com and records the message in client history.':'Phone, meeting, text and portal entries are recorded in SRCcvde; they are not sent externally.'}</small></div></div><div className="communication-fields"><label>Channel<select value={commChannel} onChange={e=>setCommChannel(e.target.value)}><option value="email">Email</option><option value="portal">Portal</option><option value="phone">Phone</option><option value="meeting">Meeting</option><option value="text">Text</option></select></label><label>Subject<input value={commSubject} onChange={e=>setCommSubject(e.target.value)} placeholder="e.g. Project kickoff" maxLength={160} required={commChannel==='email'}/></label></div><label>{commChannel==='email'?'Message':'Notes'}<textarea value={commBody} onChange={e=>setCommBody(e.target.value)} placeholder={commChannel==='email'?'Write the email to '+client.primary_contact_name+'…':'What was discussed, decided, or promised?'} required maxLength={5000}/></label><div className="communication-form-footer"><small>{commBody.length}/5000{commChannel==='email'?' · To '+client.primary_email:''}</small><button className="primary inline" disabled={busy||!commBody.trim()||(commChannel==='email'&&!commSubject.trim())}>{busy?(commChannel==='email'?'Sending…':'Saving…'):(commChannel==='email'?'Send email':'Log interaction')}</button></div></form><div className="communication-history">{comms.length?comms.slice(0,8).map(c=><article className="communication-row" key={c.id}><div className="communication-meta"><span className="communication-channel">{label(c.channel)}</span><small>{date(c.created_at)} · {label(c.direction)}{c.channel==='email'&&c.delivery_status?' · '+label(c.delivery_status):''}</small></div><div><b>{c.subject||'Client interaction'}</b><p>{c.body}</p></div></article>):<div className="communication-empty"><b>No communication history yet</b><p>Your logged calls, emails, meetings and updates will appear here.</p></div>}</div></section>
- <section className="panel"><p className="eyebrow">Create document</p><h2>Send an exact version for review</h2><div className="template-library"><div className="template-library-head"><div><p className="eyebrow">Template library</p><h3>Choose the right document faster</h3></div><button className={'template-favorite-toggle'+(favoriteTemplates.includes(docTemplate)?' active':'')} type="button" onClick={()=>toggleFavoriteTemplate(docTemplate)} aria-pressed={favoriteTemplates.includes(docTemplate)}>{favoriteTemplates.includes(docTemplate)?'★ Favorited':'☆ Favorite selected'}</button></div><div className="template-filter-row">{[['all','All'],['favorites','Favorites'],['recent','Recent'],['agreement','Agreements'],['proposal','Proposals'],['scope','Scope'],['approval','Approvals']].map(([value,name])=><button key={value} type="button" className={templateView===value?'active':''} onClick={()=>setTemplateView(value)}>{name}</button>)}</div>{quickTemplates.length?<div className="template-library-grid">{quickTemplates.map(t=><button key={t.id} type="button" className={'template-library-card'+(docTemplate===t.id?' selected':'')} onClick={()=>selectDocumentTemplate(t.id)}><span><b>{t.label}</b>{favoriteTemplates.includes(t.id)&&<i aria-label="Favorite">★</i>}</span><small>{t.description}</small><em>{label(t.category)}</em></button>)}</div>:<div className="template-library-empty">{templateView==='favorites'?'No favorites yet. Select a template and tap “Favorite selected.”':'No recent templates yet. Start a guided draft and it will appear here.'}</div>}</div><form className="document-form" onSubmit={createDocument}><div className="form-split"><label>Starting template<select value={docTemplate} onChange={e=>selectDocumentTemplate(e.target.value)}>{documentTemplates.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}</select></label><button className="ghost inline" type="button" disabled={busy||!projects.length} onClick={startTemplateWizard}>Start guided draft</button></div><p className="muted"><b>{documentTemplates.find(t=>t.id===docTemplate)?.description}</b> The guided draft prefills known client and project details, asks only for information SRCcvde cannot know, then produces a fully editable document.</p>{wizardOpen&&<div className="template-wizard"><div className="template-wizard-head"><div><p className="eyebrow">Guided draft</p><h3>{documentTemplates.find(t=>t.id===docTemplate)?.label}</h3></div><span className="status">{[...wizardBase.matchAll(/\[REQUIRED:\s*([^\]]+)\]/g)].length} questions</span></div><div className="template-wizard-fields">{[...wizardBase.matchAll(/\[REQUIRED:\s*([^\]]+)\]/g)].map((match,index)=>{const question=match[1].trim();return <label key={question}><span><b>{String(index+1).padStart(2,'0')}</b>{question}</span><textarea value={wizardAnswers[question]||''} onChange={e=>setWizardAnswers(prev=>({...prev,[question]:e.target.value}))} placeholder="Enter the project-specific answer…" rows={question.length>85?4:3}/></label>})}</div><div className="template-wizard-actions"><button className="ghost inline" type="button" onClick={cancelTemplateWizard}>Cancel</button><button className="primary inline" type="button" onClick={generateWizardDraft}>Generate editable document</button></div></div>}<label>Document name<input value={docName} onChange={e=>setDocName(e.target.value)} placeholder="Project Agreement" required/></label><div className="form-split"><label>Category<select value={docCategory} onChange={e=>setDocCategory(e.target.value)}><option value="agreement">Agreement</option><option value="proposal">Proposal</option><option value="scope">Scope</option><option value="approval">Approval</option></select></label><label>Action<select value={docKind} onChange={e=>setDocKind(e.target.value)}><option value="signature">Signature required</option><option value="acknowledgment">Acknowledgment required</option></select></label></div><label>Exact document content<textarea className="document-editor" value={docContent} onChange={e=>setDocContent(e.target.value)} placeholder="Choose a template or compose the exact version the client will review…" required minLength={20}/></label><button className="primary" disabled={busy}>Send to client workspace</button></form></section></section><aside><ActivityFeed rows={activity}/></aside></div></>
-}
-
-function ProjectsPage(){
- const[rows,setRows]=useState<Project[]>([]),[selected,setSelected]=useState<Project|null>(null),[milestones,setMilestones]=useState<Milestone[]>([]),[projectMilestones,setProjectMilestones]=useState<Milestone[]>([]),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[newTitle,setNewTitle]=useState(''),[newDescription,setNewDescription]=useState(''),[query,setQuery]=useState(''),[projectFilter,setProjectFilter]=useState(()=>new URLSearchParams(location.search).get('view')||'active'),[loading,setLoading]=useState(true),[loadError,setLoadError]=useState(false)
- const load=async()=>{setLoading(true);setLoadError(false);try{const[p,m]=await Promise.all([supabase.from('projects').select('*').order('created_at',{ascending:false}),supabase.from('project_milestones').select('*')]);if(p.error||m.error)throw new Error();setRows((p.data||[]) as Project[]);setProjectMilestones((m.data||[]) as Milestone[]);if(selected){const fresh=(p.data||[]).find((v:any)=>v.id===selected.id);if(fresh)setSelected(fresh as Project)}}catch{setLoadError(true)}finally{setLoading(false)}}
- useEffect(()=>{load()},[])
- async function openProject(p:Project){setSelected(p);setMessage('');const{data}=await supabase.from('project_milestones').select('*').eq('project_id',p.id).order('position');setMilestones((data||[]) as Milestone[])}
- async function updateProject(patch:Partial<Project>){if(!selected)return;setBusy(true);setMessage('');const{error}=await supabase.from('projects').update(patch).eq('id',selected.id);setBusy(false);if(error)setMessage(error.message);else{setMessage('Project workspace updated.');await load()}}
- async function updateMilestone(id:string,patch:Partial<Milestone>){setBusy(true);setMessage('');const target=milestones.find(m=>m.id===id);let error:any=null;if(patch.status&&target){const updates=milestones.map(m=>{if(m.id===id)return supabase.from('project_milestones').update({...patch,completed_at:patch.status==='completed'?(m.completed_at||new Date().toISOString()):null}).eq('id',m.id);if(patch.status==='current'&&m.status==='current')return supabase.from('project_milestones').update({status:'upcoming'}).eq('id',m.id);return null}).filter(Boolean) as any[];if(patch.status==='completed'){const next=milestones.find(m=>m.position>target.position&&m.status==='upcoming');if(next)updates.push(supabase.from('project_milestones').update({status:'current'}).eq('id',next.id))}const results=await Promise.all(updates);error=results.find((x:any)=>x.error)?.error||null}else{const result=await supabase.from('project_milestones').update(patch).eq('id',id);error=result.error}setBusy(false);if(error)setMessage(error.message);else if(selected){setMessage(patch.status==='completed'?'Milestone completed. The roadmap advanced automatically.':'Milestone updated.');await openProject(selected)}}
- async function addMilestone(e:FormEvent){e.preventDefault();if(!selected||!newTitle.trim())return;setBusy(true);setMessage('');const next=milestones.length?Math.max(...milestones.map(m=>m.position))+1:1;const{error}=await supabase.from('project_milestones').insert({project_id:selected.id,milestone_key:'custom_'+Date.now(),title:newTitle.trim(),description:newDescription.trim()||null,position:next,status:'upcoming',client_visible:true});setBusy(false);if(error)setMessage(error.message);else{setNewTitle('');setNewDescription('');setMessage('Milestone added to the roadmap.');await openProject(selected)}}
- async function removeMilestone(m:Milestone){if(!selected||!confirm('Remove "'+m.title+'" from this project roadmap?'))return;setBusy(true);setMessage('');const{error}=await supabase.from('project_milestones').delete().eq('id',m.id);setBusy(false);if(error)setMessage(error.message);else{setMessage('Milestone removed.');await openProject(selected)}}
- const filteredProjects=rows.filter(p=>{const q=query.trim().toLowerCase();const matchesQuery=!q||[p.name,p.project_type,p.phase,p.status].some(v=>(v||'').toLowerCase().includes(q));const pm=projectMilestones.filter(m=>m.project_id===p.id);const hasOverdue=pm.some(m=>m.due_at&&new Date(m.due_at).getTime()<Date.now()&&m.status!=='completed');const hasBlocked=pm.some(m=>m.status==='blocked');const matchesFilter=projectFilter==='all'||(projectFilter==='active'&&['planning','active','launching'].includes(p.status))||(projectFilter==='overdue'&&hasOverdue)||(projectFilter==='blocked'&&hasBlocked)||p.status===projectFilter;return matchesQuery&&matchesFilter})
- const selectedMilestoneProgress=milestones.length?Math.round((milestones.filter(m=>m.status==='completed').length/milestones.length)*100):(selected?.progress||0)
- if(selected)return <><button className="back" onClick={()=>{setSelected(null);setMilestones([])}}>← Projects</button><PageTitle eyebrow="Delivery control" title={selected.name} copy="Manage what the client sees in their live project workspace."/>
- {message&&<p className="success-message">{message}</p>}
- <section className="panel project-control"><div className="section-head"><div><p className="eyebrow">Project status</p><h2>Workspace controls</h2></div><StatusPill value={selected.status}/></div><div className="project-control-grid"><label>Phase<select value={selected.phase} disabled={busy} onChange={e=>{setSelected({...selected,phase:e.target.value});updateProject({phase:e.target.value})}}>{projectStages.map(stage=><option key={stage.value} value={stage.value}>{stage.label}</option>)}</select></label><label>Status<select value={selected.status} disabled={busy} onChange={e=>{setSelected({...selected,status:e.target.value});updateProject({status:e.target.value})}}>{['planning','active','on_hold','launching','completed','archived'].map(x=><option key={x} value={x}>{label(x)}</option>)}</select></label><label>Progress <strong>{selectedMilestoneProgress}%</strong><div className="progress"><i style={{width:selectedMilestoneProgress+'%'}}/></div><small>Calculated automatically from completed milestones.</small></label></div></section>
- <section className="panel"><div className="section-head"><div><p className="eyebrow">Client roadmap</p><h2>Milestones</h2></div><span className="status">{milestones.filter(m=>m.status==='completed').length}/{milestones.length} complete</span></div><div className="admin-milestones">{milestones.map((m,i)=><div className="admin-milestone" key={m.id}><div><b>{String(i+1).padStart(2,'0')} · {m.title}</b><small>{m.description||'No description'}{m.status==='blocked'?' · Blocked':m.due_at&&new Date(m.due_at).getTime()<Date.now()&&m.status!=='completed'?' · Overdue':''}</small></div><label>Status<select value={m.status} disabled={busy} onChange={e=>updateMilestone(m.id,{status:e.target.value,completed_at:e.target.value==='completed'?new Date().toISOString():null})}>{['upcoming','current','completed','blocked'].map(x=><option key={x} value={x}>{label(x)}</option>)}</select></label><label>Due<input type="date" value={m.due_at?m.due_at.slice(0,10):''} disabled={busy} onChange={e=>updateMilestone(m.id,{due_at:e.target.value?new Date(e.target.value+'T12:00:00').toISOString():null})}/></label><label className="visibility-check"><input type="checkbox" checked={m.client_visible} disabled={busy} onChange={e=>updateMilestone(m.id,{client_visible:e.target.checked})}/> Client visible</label><div className="milestone-actions">{m.milestone_key.startsWith('custom_')&&<button className="ghost danger-action" disabled={busy} onClick={()=>removeMilestone(m)}>Remove custom milestone</button>}</div></div>)}</div>{!milestones.length&&<Empty>No milestones have been created for this project yet.</Empty>}<form className="milestone-create" onSubmit={addMilestone}><div><p className="eyebrow">Add milestone</p><h3>Extend the roadmap</h3></div><label>Title<input value={newTitle} onChange={e=>setNewTitle(e.target.value)} placeholder="Client review" required maxLength={120}/></label><label>Description<input value={newDescription} onChange={e=>setNewDescription(e.target.value)} placeholder="What happens at this stage" maxLength={300}/></label><button className="primary inline" disabled={busy||!newTitle.trim()}>Add milestone</button></form></section></>
- return <><PageTitle eyebrow="Delivery" title="Projects" copy="Every active build, its phase and current progress."/><section className="panel project-directory"><div className="directory-tools"><label>Search projects<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Name, type, phase, or status…"/></label><label>View<select value={projectFilter} onChange={e=>{const v=e.target.value;setProjectFilter(v);const u=new URL(location.href);if(v==='active')u.searchParams.delete('view');else u.searchParams.set('view',v);history.replaceState({},'',u.pathname+u.search)}}><option value="active">Active work</option><option value="all">All projects</option><option value="overdue">Overdue milestones</option><option value="blocked">Blocked milestones</option><option value="planning">Planning</option><option value="on_hold">On hold</option><option value="launching">Launching</option><option value="completed">Completed</option><option value="archived">Archived</option></select></label><span className="directory-count">{loading?'Loading…':`${filteredProjects.length} of ${rows.length}`}</span></div><LoadState loading={loading} error={loadError?'Could not load projects. Try again.':null} onRetry={load} loadingText="Loading projects…"/>{!loading&&!loadError&&filteredProjects.map(p=>{const pm=projectMilestones.filter(m=>m.project_id===p.id);const complete=pm.filter(m=>m.status==='completed').length;const progress=pm.length?Math.round((complete/pm.length)*100):p.progress;const blocked=pm.filter(m=>m.status==='blocked').length;const overdue=pm.filter(m=>m.due_at&&new Date(m.due_at).getTime()<Date.now()&&m.status!=='completed').length;return <button className="project-row project-row-button" key={p.id} onClick={()=>openProject(p)}><div><b>{p.name}</b><small>{p.project_type||'Custom project'} · {label(p.phase)}{pm.length?' · '+complete+'/'+pm.length+' milestones':''}{blocked?' · '+blocked+' blocked':''}{overdue?' · '+overdue+' overdue':''}</small></div><div className="progress"><i style={{width:progress+'%'}}/></div><strong>{progress}%</strong><StatusPill value={p.status}/></button>})}{!loading&&!loadError&&(!rows.length?<Empty>No projects yet.</Empty>:!filteredProjects.length&&<Empty>No projects match this view.</Empty>)}</section></>
-}
-function DocumentsPage(){
- const[rows,setRows]=useState<DocumentRow[]>([]),[artifacts,setArtifacts]=useState<ExecutedArtifact[]>([]),[requests,setRequests]=useState<SignatureRequest[]>([]),[clients,setClients]=useState<Client[]>([]),[integration,setIntegration]=useState<any>(null),[busy,setBusy]=useState(''),[message,setMessage]=useState(''),[downloadUrl,setDownloadUrl]=useState(''),[originalDownloadUrl,setOriginalDownloadUrl]=useState(''),[clientId,setClientId]=useState(''),[clientSecret,setClientSecret]=useState(''),[query,setQuery]=useState(''),[docFilter,setDocFilter]=useState(()=>new URLSearchParams(location.search).get('view')||'all'),[loading,setLoading]=useState(true),[loadError,setLoadError]=useState(false)
- const load=async()=>{setLoading(true);setLoadError(false);try{const[d,a,r,c,g]=await Promise.all([supabase.from('client_documents').select('*').order('created_at',{ascending:false}),supabase.from('executed_document_artifacts').select('*').order('generated_at',{ascending:false}),supabase.from('signature_requests').select('*').eq('signer_side','client').order('requested_at',{ascending:false}),supabase.from('clients').select('*'),supabase.from('app_integrations').select('*').eq('provider','google_drive').maybeSingle()]);if(d.error||a.error||r.error||c.error||g.error)throw new Error();setRows((d.data||[]) as DocumentRow[]);setArtifacts((a.data||[]) as ExecutedArtifact[]);setRequests((r.data||[]) as SignatureRequest[]);setClients((c.data||[]) as Client[]);setIntegration(g.data||null)}catch{setLoadError(true)}finally{setLoading(false)}}
- useEffect(()=>{load();const p=new URLSearchParams(location.search);if(p.get('drive')==='connected'){setMessage('Google Drive connected. Executed documents can now archive automatically.');history.replaceState({},'',location.pathname)}else if(p.get('drive')==='error'){setMessage('Google Drive connection failed: '+label(p.get('reason')||'unknown error'));history.replaceState({},'',location.pathname)}},[])
- async function saveGoogleCredentials(e:FormEvent){e.preventDefault();setBusy('google-config');setMessage('');const{error}=await supabase.rpc('configure_google_drive_oauth',{p_client_id:clientId.trim(),p_client_secret:clientSecret.trim()});setBusy('');setClientSecret('');if(error)setMessage(error.message);else{setMessage('OAuth credentials stored securely. Now connect the SRCcvde Drive account.');load()}}
- async function connectGoogle(){setBusy('google-connect');setMessage('');const{data,error}=await supabase.rpc('begin_google_drive_oauth');setBusy('');const c=data?.[0];if(error||!c?.client_id||!c?.state){setMessage(error?.message||'Could not start Google authorization.');return}const p=new URLSearchParams({client_id:c.client_id,redirect_uri:c.redirect_uri,response_type:'code',scope:c.scope,access_type:'offline',prompt:'consent',state:c.state,trigger_onepick:'true',allow_folder_selection:'true',file_ids:'1j23qs5KZowr6BuVbbRnQdQvGN6mHhsG2'});window.location.assign('https://accounts.google.com/o/oauth2/v2/auth?'+p.toString())}
- async function archive(documentId:string){setBusy(documentId);setMessage('');setDownloadUrl('');setOriginalDownloadUrl('');const{data,error}=await supabase.functions.invoke('finalize-executed-document',{body:{document_id:documentId}});setBusy('');if(error){let detail=error.message;try{const response=(error as any).context as Response|undefined;if(response){const body=await response.clone().json();detail=body?.detail||body?.error||detail}}catch{}setMessage(detail)}else{setDownloadUrl(data?.download_url||'');setOriginalDownloadUrl(data?.original_download_url||'');setMessage(data?.drive?.status==='synced'?'Executed PDF is safely archived in Google Drive.':data?.artifact?.drive_sync_status==='synced'?'Executed PDF is safely archived in Google Drive.':'Executed PDF is in the secure vault. Google Drive sync needs attention.');load()}}
- async function countersign(documentId:string){const legalName=prompt('Type your legal name to countersign this exact document version.');if(!legalName)return;setBusy(documentId);setMessage('Countersigning and finalizing…');setDownloadUrl('');setOriginalDownloadUrl('');const{error}=await supabase.rpc('countersign_document',{p_document_id:documentId,p_legal_name:legalName.trim()});if(error){setBusy('');setMessage(error.message);return}const{data,error:finalError}=await supabase.functions.invoke('finalize-executed-document',{body:{document_id:documentId}});setBusy('');if(finalError){let detail=finalError.message;try{const response=(finalError as any).context as Response|undefined;if(response){const body=await response.clone().json();detail=body?.detail||body?.error||detail}}catch{}setMessage('Countersigned. The PDF archive still needs attention: '+detail)}else{setDownloadUrl(data?.download_url||'');setOriginalDownloadUrl(data?.original_download_url||'');setMessage(data?.drive?.status==='synced'?'Countersigned, fully executed, and archived to Google Drive.':data?.drive?.status==='failed'?'Countersigned and fully executed. The secure PDF is stored in SRCcvde; reconnect Google Drive to restore the Drive copy.':'Countersigned and fully executed. The secure PDF was generated; Google Drive is not connected yet.')}await supabase.functions.invoke('dispatch-notifications');load()}
- const artifactFor=(id:string)=>artifacts.find(a=>a.document_id===id)
- const requestFor=(id:string)=>requests.find(r=>r.document_id===id&&r.signer_side==='client')
- const openReview=(requestId:string)=>{history.pushState({},'', '/documents/'+requestId);dispatchEvent(new PopStateEvent('popstate'))}
- const filteredRows=rows.filter(d=>{const a=artifactFor(d.id);const client=clients.find(c=>c.id===d.client_id);const matchesQuery=!query.trim()||[d.name,d.category,d.state,client?.name,client?.primary_contact_name,client?.primary_email].some(v=>(v||'').toLowerCase().includes(query.trim().toLowerCase()));const matchesFilter=docFilter==='all'||(docFilter==='pending'&&d.state!=='final')||(docFilter==='final'&&d.state==='final')||(docFilter==='archived'&&!!a)||(docFilter==='attention'&&!!a&&a.drive_sync_status==='failed');return matchesQuery&&matchesFilter})
- return <><PageTitle eyebrow="Vault" title="Documents" copy="Immutable executed PDFs, signature certificates and the Google Drive archive index."/>
- {message&&<p className="success-message">{message}{originalDownloadUrl&&<> · <a href={originalDownloadUrl} target="_blank" rel="noreferrer">Original</a></>}{downloadUrl&&<> · <a href={downloadUrl} target="_blank" rel="noreferrer">Executed</a></>}</p>}
- <section className="panel drive-connect"><div className="section-head"><div><p className="eyebrow">Archive integration</p><h2>Google Drive</h2></div><span className={'sync-state '+(integration?.status==='connected'?'synced':'')}>{integration?.status==='connected'?'Connected':integration?.status==='configured'?'Ready to connect':'Not connected'}</span></div>
- {integration?.status==='connected'?<div className="connected-drive"><div><b>{integration.root_folder_name||'03 — Clients'}</b><small>Executed PDFs archive automatically into each client's folder.</small></div><button className="ghost" onClick={connectGoogle} disabled={busy==='google-connect'}>Reconnect</button></div>:integration?.status==='configured'?<><p className="muted">Credentials are encrypted in Supabase Vault. Authorize SRCcvde to the client archive folder to finish.</p><button className="primary inline" onClick={connectGoogle} disabled={busy==='google-connect'}>{busy==='google-connect'?'Opening Google…':'Connect SRCcvde Drive'}</button></>:<form className="google-credential-form" onSubmit={saveGoogleCredentials}><p className="muted">Paste the OAuth credential here instead of chat. The client secret is sent directly to Supabase over HTTPS and stored encrypted in Vault; it is never committed to GitHub.</p><label>Google OAuth Client ID<input value={clientId} onChange={e=>setClientId(e.target.value)} autoComplete="off" required placeholder="…apps.googleusercontent.com"/></label><label>Google OAuth Client Secret<input type="password" value={clientSecret} onChange={e=>setClientSecret(e.target.value)} autoComplete="new-password" required placeholder="GOCSPX-…"/></label><button className="primary inline" disabled={busy==='google-config'}>{busy==='google-config'?'Securing…':'Save securely'}</button></form>}</section>
- <section className="panel document-index"><div className="directory-tools"><label>Search documents<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Document, client, category, or state…"/></label><label>View<select value={docFilter} onChange={e=>{const v=e.target.value;setDocFilter(v);const u=new URL(location.href);if(v==='all')u.searchParams.delete('view');else u.searchParams.set('view',v);history.replaceState({},'',u.pathname+u.search)}}><option value="all">All documents</option><option value="pending">Needs action</option><option value="final">Final</option><option value="archived">Archived</option><option value="attention">Archive attention</option></select></label><span className="directory-count">{loading?'Loading…':`${filteredRows.length} of ${rows.length}`}</span></div><LoadState loading={loading} error={loadError?'Could not load documents. Try again.':null} onRetry={load} loadingText="Loading documents…"/>{!loading&&!loadError&&filteredRows.map(d=>{const a=artifactFor(d.id);const client=clients.find(c=>c.id===d.client_id);const req=requestFor(d.id);const awaitingCountersign=d.signature_kind==='signature'&&d.state==='signed'&&req?.status==='signed';return <div className="doc-row vault-row" key={d.id}><div><b>{d.name}</b><small>{client?.name?client.name+' · ':''}{label(d.category)} · {a?'Executed':awaitingCountersign?'Client signed · awaiting SRCcvde':label(d.state)}</small></div><div className="vault-actions">{a&&<span className={'sync-state '+a.drive_sync_status}>{a.drive_sync_status==='synced'&&a.drive_original_file_id?'Original + executed archived':a.drive_sync_status==='synced'?'Executed archived':a.drive_sync_status==='failed'?'Drive retry needed':'Secure vault'}</span>}{d.state==='final'?<button className="ghost" disabled={busy===d.id} onClick={()=>archive(d.id)}>{busy===d.id?'Preparing…':a?'Open document archive':'Generate document archive'}</button>:awaitingCountersign?<><button className="ghost" onClick={()=>openReview(req!.id)}>Review signed document</button><button className="primary inline" disabled={busy===d.id} onClick={()=>countersign(d.id)}>{busy===d.id?'Finalizing…':'Countersign & archive'}</button></>:req?<button className="ghost" onClick={()=>openReview(req.id)}>Review document</button>:<StatusPill value={d.state}/>}</div></div>})}{!loading&&!loadError&&(!rows.length?<Empty>No documents indexed yet.</Empty>:!filteredRows.length&&<Empty>No documents match this view.</Empty>)}</section></>}
-function ActivityPage(){
- const[rows,setRows]=useState<Activity[]>([]),[query,setQuery]=useState(''),[action,setAction]=useState('all'),[range,setRange]=useState('30'),[loading,setLoading]=useState(true),[loadError,setLoadError]=useState(false)
- const load=async()=>{setLoading(true);setLoadError(false);try{const{data,error}=await supabase.from('crm_activity').select('*').order('created_at',{ascending:false}).limit(100);if(error)throw new Error();setRows((data||[]) as Activity[])}catch{setLoadError(true)}finally{setLoading(false)}};useEffect(()=>{void load()},[])
- const actions=Array.from(new Set(rows.map(r=>r.action).filter(Boolean))).sort()
- const filtered=rows.filter(r=>{const q=query.trim().toLowerCase();const cutoff=range==='all'?0:Date.now()-Number(range)*86400000;const matchesRange=!cutoff||new Date(r.created_at).getTime()>=cutoff;return matchesRange&&(action==='all'||r.action===action)&&(!q||[r.summary,r.action,r.entity_type].some(v=>(v||'').toLowerCase().includes(q)))})
- return <><PageTitle eyebrow="Audit trail" title="Activity" copy="A timestamped history of meaningful CRM and client actions."/><section className="panel activity-tools"><div className="directory-tools"><label>Search activity<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Action, summary, or record type…"/></label><label>Action<select value={action} onChange={e=>setAction(e.target.value)}><option value="all">All activity</option>{actions.map(a=><option key={a} value={a}>{label(a)}</option>)}</select></label><label>Time range<select value={range} onChange={e=>setRange(e.target.value)}><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="all">All loaded</option></select></label><span className="directory-count">{loading?'Loading…':`${filtered.length} of ${rows.length}`}</span></div></section><LoadState loading={loading} error={loadError?'Could not load activity. Try again.':null} onRetry={load} loadingText="Loading activity…"/>{!loading&&!loadError&&<ActivityFeed rows={filtered}/>}</>
-}
-
-function ActivityFeed({rows}:{rows:Activity[]}){return <section className="panel activity-panel"><p className="eyebrow">Activity</p>{rows.length?rows.map(a=><div className="activity-item" key={a.id}><i/><div><b>{a.summary}</b><small>{date(a.created_at)} · {label(a.action)}</small></div></div>):<Empty>No activity yet.</Empty>}</section>}
-
-function AdminHandoffsPage({navigate}:{navigate:(p:string)=>void}){
- const[clients,setClients]=useState<Client[]>([]),[handoffs,setHandoffs]=useState<Handoff[]>([]),[tasks,setTasks]=useState<HandoffTask[]>([]),[loading,setLoading]=useState(true)
- useEffect(()=>{Promise.all([supabase.from('clients').select('*').order('name'),supabase.from('client_handoffs').select('*').order('updated_at',{ascending:false}),supabase.from('handoff_tasks').select('*')]).then(([c,h,t])=>{setClients((c.data||[]) as Client[]);setHandoffs((h.data||[]) as Handoff[]);setTasks((t.data||[]) as HandoffTask[]);setLoading(false)})},[])
- const handoffFor=(clientId:string)=>handoffs.find(h=>h.client_id===clientId)
- return <><PageTitle eyebrow="Closeout" title="Handoffs" copy="Run every client through the same documented transfer, aftercare, retention, and access-removal process."/><section className="panel"><div className="section-head"><div><p className="eyebrow">Client lifecycle</p><h2>Handoff queue</h2></div><span className="status">{handoffs.filter(h=>h.status!=='completed').length} open</span></div>{loading?<p className="muted">Loading handoffs…</p>:clients.map(client=>{const h=handoffFor(client.id),ht=h?tasks.filter(t=>t.handoff_id===h.id):[],done=ht.filter(t=>t.status==='complete'||t.status==='not_applicable').length,total=ht.length;return <button className="handoff-row" key={client.id} onClick={()=>navigate('/handoffs/'+client.id)}><Avatar name={client.name}/><div><b>{client.name}</b><small>{h?label(h.status)+' · '+done+'/'+total+' checklist items':'Not started'}</small></div><div className="handoff-row-dates"><small>{h?.aftercare_ends_at?'Aftercare '+date(h.aftercare_ends_at):'No aftercare date'}</small><small>{h?.retention_ends_at?'Deletion '+date(h.retention_ends_at):'No deletion date'}</small></div><span className={'pill '+(h?.status||'planning')}>{h?label(h.status):'Start'}</span></button>})}</section></>
-}
-
-function AdminHandoffPage({clientId,navigate}:{clientId:string;navigate:(p:string)=>void}){
- const[client,setClient]=useState<Client|null>(null),[projects,setProjects]=useState<Project[]>([]),[handoff,setHandoff]=useState<Handoff|null>(null),[tasks,setTasks]=useState<HandoffTask[]>([]),[docs,setDocs]=useState<DocumentRow[]>([]),[requests,setRequests]=useState<SignatureRequest[]>([]),[meetingAt,setMeetingAt]=useState(''),[meetingUrl,setMeetingUrl]=useState(''),[verificationEmail,setVerificationEmail]=useState(''),[notes,setNotes]=useState(''),[busy,setBusy]=useState(''),[message,setMessage]=useState('')
- const load=async()=>{const[c,p,h,d,r]=await Promise.all([supabase.from('clients').select('*').eq('id',clientId).single(),supabase.from('projects').select('*').eq('client_id',clientId).order('created_at'),supabase.from('client_handoffs').select('*').eq('client_id',clientId).maybeSingle(),supabase.from('client_documents').select('*').eq('client_id',clientId).order('created_at',{ascending:false}),supabase.from('signature_requests').select('*').eq('client_id',clientId).order('requested_at',{ascending:false})]);setClient(c.data as Client);setProjects((p.data||[]) as Project[]);setDocs((d.data||[]) as DocumentRow[]);setRequests((r.data||[]) as SignatureRequest[]);const row=h.data as Handoff|null;setHandoff(row);if(row){const{data}=await supabase.from('handoff_tasks').select('*').eq('handoff_id',row.id).order('position');setTasks((data||[]) as HandoffTask[]);setMeetingAt(localDateTimeInput(row.meeting_at));setMeetingUrl(row.meeting_url||'');setVerificationEmail(row.verification_email||c.data?.primary_email||'');setNotes(row.notes||'')}else{setTasks([]);setMeetingAt('');setMeetingUrl('');setVerificationEmail(c.data?.primary_email||'');setNotes('')}}
- useEffect(()=>{void load()},[clientId])
- const project=projects.find(p=>p.id===handoff?.project_id)||projects.find(p=>!['completed','archived'].includes(p.status))||projects[0]
- const docFor=(prefix:string)=>docs.find(d=>d.name.startsWith(prefix))
- const requestFor=(documentId?:string)=>documentId?requests.find(r=>r.document_id===documentId&&r.signer_side==='client'):undefined
- const handoffDoc=docFor('Handoff & Aftercare Agreement'),retentionDoc=docFor('Data Retention Agreement')
- const handoffFinal=handoffDoc?.state==='final',retentionFinal=retentionDoc?.state==='final'
- const taskComplete=(key:string)=>tasks.find(t=>t.task_key===key)?.status==='complete'
- async function startHandoff(){if(!client)return;setBusy('start');const preferred=projects.find(p=>!['completed','archived'].includes(p.status))||projects[0];const{error}=await supabase.from('client_handoffs').insert({client_id:clientId,project_id:preferred?.id||null,verification_email:client.primary_email,status:'planning'});setBusy('');setMessage(error?error.message:'Handoff workspace started.');if(!error)await load()}
- async function saveDetails(e:FormEvent){e.preventDefault();if(!handoff)return;setBusy('save');const payload={meeting_at:meetingAt?new Date(meetingAt).toISOString():null,meeting_url:meetingUrl.trim()||null,verification_email:verificationEmail.trim()||null,notes:notes.trim()||null,updated_at:new Date().toISOString()};const{error}=await supabase.from('client_handoffs').update(payload).eq('id',handoff.id);if(!error&&meetingAt){const{data:{user}}=await supabase.auth.getUser();await supabase.from('handoff_tasks').update({status:'complete',completed_at:new Date().toISOString(),completed_by:user?.id||null}).eq('handoff_id',handoff.id).eq('task_key','meeting_scheduled')}setBusy('');setMessage(error?error.message:'Handoff details saved.');if(!error)await load()}
- async function verifyEmail(){if(!handoff||!verificationEmail.trim())return;setBusy('verify');const now=new Date().toISOString(),{data:{user}}=await supabase.auth.getUser();const[{error}]=await Promise.all([supabase.from('client_handoffs').update({verification_email:verificationEmail.trim(),verified_at:now,updated_at:now}).eq('id',handoff.id),supabase.from('handoff_tasks').update({status:'complete',completed_at:now,completed_by:user?.id||null}).eq('handoff_id',handoff.id).eq('task_key','verification_email_confirmed')]);setBusy('');setMessage(error?error.message:'Client transfer email verified.');if(!error)await load()}
- async function setTaskStatus(task:HandoffTask,status:HandoffTask['status']){if(!handoff)return;if(task.task_key==='client_access_disabled'&&status==='complete'&&!confirm('Disable this client\'s SRCcvde workspace access now?'))return;setBusy(task.id);const now=new Date().toISOString(),{data:{user}}=await supabase.auth.getUser();if(task.task_key==='client_access_disabled'&&status==='complete'){const{error}=await supabase.rpc('set_client_portal_access',{p_client_id:clientId,p_enabled:false});if(error){setBusy('');setMessage(error.message);return}}const{error}=await supabase.from('handoff_tasks').update({status,completed_at:status==='complete'?now:null,completed_by:status==='complete'?user?.id||null:null}).eq('id',task.id);if(!error&&status==='complete'){const patch:any={updated_at:now};if(task.task_key==='contract_archive_delivered')patch.archive_downloaded_at=now;if(task.task_key==='final_notice_sent')patch.admin_removal_notice_at=now;if(task.task_key==='admin_access_removed'){patch.admin_removed_at=now;patch.status='retention'}if(task.task_key==='data_erased')patch.data_deleted_at=now;if(task.task_key==='handoff_complete')patch.status='completed';if(Object.keys(patch).length>1)await supabase.from('client_handoffs').update(patch).eq('id',handoff.id)}setBusy('');setMessage(error?error.message:'Checklist updated.');if(!error)await load()}
- function prepareDocument(templateId:string){if(!client||!project)return setMessage('Add a project before preparing handoff documents.');const template=documentTemplates.find(t=>t.id===templateId);if(!template)return;const ctx:TemplateContext={clientName:client.name,clientContact:client.primary_contact_name,clientEmail:client.primary_email,projectName:project.name,projectType:project.project_type||'Custom technology project',projectPhase:label(project.phase),today:new Intl.DateTimeFormat(undefined,{month:'long',day:'numeric',year:'numeric'}).format(new Date())};const draft={selectedWorkProject:project.id,docName:template.documentName+' — '+project.name,docCategory:template.category,docKind:template.signatureKind,docContent:template.buildContent(ctx),docTemplate:template.id};try{localStorage.setItem('srccvde:admin-client-draft:'+clientId,JSON.stringify(draft))}catch{}navigate('/clients/'+clientId)}
- async function generateArchive(){if(!handoff)return;setBusy('archive');setMessage('');const{data,error}=await supabase.functions.invoke('handoff-contract-archive',{body:{client_id:clientId}});setBusy('');if(error||!data?.url){setMessage(data?.error||error?.message||'Could not generate the contract archive.');return}window.open(data.url,'_blank','noopener,noreferrer');setMessage(data.document_count+' executed document'+(data.document_count===1?'':'s')+' packaged into '+data.file_name+'. The link expires in one hour.');await load()}
- async function startAftercare(){if(!handoff)return;const required=['meeting_completed','verification_email_confirmed','github_transferred','supabase_transferred','contract_archive_delivered'];const missing=required.filter(k=>!taskComplete(k));if(!handoffFinal||!retentionFinal||missing.length){setMessage('Before aftercare starts: fully execute both agreements and complete the meeting, email verification, GitHub transfer, Supabase transfer, and contract archive delivery.');return}if(!confirm('Start the 30-calendar-day aftercare clock now? This will also set the data-retention deadline 60 calendar days from today.'))return;setBusy('aftercare');const now=new Date().toISOString(),aftercare=addDaysIso(now,30),retention=addDaysIso(now,60),{data:{user}}=await supabase.auth.getUser();const[a,b]=await Promise.all([supabase.from('client_handoffs').update({status:'aftercare',effective_at:now,aftercare_ends_at:aftercare,retention_ends_at:retention,updated_at:now}).eq('id',handoff.id),supabase.from('handoff_tasks').update({status:'complete',completed_at:now,completed_by:user?.id||null}).eq('handoff_id',handoff.id).eq('task_key','aftercare_started')]);setBusy('');setMessage(a.error?.message||b.error?.message||'Aftercare started. The 30-day aftercare and 30-day retention deadlines are now locked in.');if(!a.error&&!b.error)await load()}
- if(!client)return <p className="muted">Loading handoff…</p>
- if(!handoff)return <><button className="back" onClick={()=>navigate('/handoffs')}>← Handoffs</button><PageTitle eyebrow="Client handoff" title={client.name} copy="Start a controlled closeout with signed agreements, ownership transfer, aftercare, and documented data retention."/><section className="panel attention-clear"><span>→</span><div><p className="eyebrow">Not started</p><h2>Create the handoff workspace</h2><p className="muted">This creates the standard SRCcvde handoff checklist and does not transfer or delete anything yet.</p><button className="primary inline" disabled={busy==='start'} onClick={startHandoff}>{busy==='start'?'Starting…':'Start handoff'}</button></div></section></>
- const aftercareDays=daysUntil(handoff.aftercare_ends_at),retentionDays=daysUntil(handoff.retention_ends_at)
- return <><button className="back" onClick={()=>navigate('/handoffs')}>← Handoffs</button><header className="detail-head"><div className="identity"><Avatar name={client.name}/><div><p className="eyebrow">Client handoff</p><h1>{client.name}</h1><p>{client.primary_contact_name} · {client.primary_email}</p></div></div><div className="detail-actions"><StatusPill value={handoff.status}/><button className="ghost" onClick={()=>navigate('/clients/'+clientId)}>Client record →</button></div></header>{message&&<p className="success-message">{message}</p>}
- <section className="handoff-summary-grid"><article><small>Aftercare</small><strong>{handoff.aftercare_ends_at?date(handoff.aftercare_ends_at):'Not started'}</strong><span>{aftercareDays===null?'Starts after required handoff steps':aftercareDays>=0?aftercareDays+' days remaining':'Ended'}</span></article><article><small>Retention / deletion</small><strong>{handoff.retention_ends_at?date(handoff.retention_ends_at):'Not set'}</strong><span>{retentionDays===null?'Set when aftercare begins':retentionDays>=0?retentionDays+' days remaining':'Retention ended'}</span></article><article><small>Admin removal</small><strong>{handoff.admin_removed_at?date(handoff.admin_removed_at):'Pending'}</strong><span>{handoff.admin_removal_notice_at?'Client notice logged':'Notify client on the final aftercare day'}</span></article></section>
- <div className="detail-grid"><section>
- <section className="panel"><div className="section-head"><div><p className="eyebrow">01 · Meeting & verification</p><h2>Set the closeout meeting</h2></div><span className="status">{handoff.meeting_at?date(handoff.meeting_at):'Unscheduled'}</span></div><form className="document-form" onSubmit={saveDetails}><div className="form-split"><label>Zoom meeting<input type="datetime-local" value={meetingAt} onChange={e=>setMeetingAt(e.target.value)}/></label><label>Zoom link<input type="url" value={meetingUrl} onChange={e=>setMeetingUrl(e.target.value)} placeholder="https://zoom.us/j/..."/></label></div><div className="form-split"><label>Verified transfer email<input type="email" value={verificationEmail} onChange={e=>setVerificationEmail(e.target.value)} placeholder={client.primary_email}/></label><div className="handoff-verify"><small>{handoff.verified_at?'Verified '+date(handoff.verified_at):'Verification still required'}</small><button className="ghost inline" type="button" disabled={busy==='verify'||!verificationEmail.trim()} onClick={verifyEmail}>{busy==='verify'?'Saving…':'Verify email'}</button></div></div><label>Internal handoff notes<textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Accounts, caveats, transfer notes, or anything to cover in the meeting."/></label><button className="primary inline" disabled={busy==='save'}>{busy==='save'?'Saving…':'Save handoff details'}</button></form>{handoff.meeting_url&&<p className="muted"><a href={handoff.meeting_url} target="_blank" rel="noreferrer">Open Zoom meeting →</a></p>}</section>
- <section className="panel"><div className="section-head"><div><p className="eyebrow">02 · Agreements</p><h2>Get both documents fully executed</h2></div></div><div className="handoff-agreements"><article><div><b>Handoff & Aftercare Agreement</b><small>{handoffDoc?(handoffFinal?'Fully executed':requestFor(handoffDoc.id)?.status==='signed'?'Client signed · countersign required':label(requestFor(handoffDoc.id)?.status||handoffDoc.state)):'Not created'}</small></div>{handoffDoc?<button className="ghost" onClick={()=>navigate('/clients/'+clientId)}>Open signing room</button>:<button className="primary inline" onClick={()=>prepareDocument('handoff-aftercare')}>Prepare agreement</button>}</article><article><div><b>Data Retention Agreement</b><small>{retentionDoc?(retentionFinal?'Fully executed':requestFor(retentionDoc.id)?.status==='signed'?'Client signed · countersign required':label(requestFor(retentionDoc.id)?.status||retentionDoc.state)):'Not created'}</small></div>{retentionDoc?<button className="ghost" onClick={()=>navigate('/clients/'+clientId)}>Open signing room</button>:<button className="primary inline" onClick={()=>prepareDocument('data-retention')}>Prepare agreement</button>}</article></div></section>
- <section className="panel"><div className="section-head"><div><p className="eyebrow">03 · Contract archive</p><h2>Package the client record</h2><p className="section-copy">Creates a ZIP of every fully executed PDF currently in this client's SRCcvde document vault plus a hash manifest.</p></div></div><div className="detail-actions"><button className="primary inline" disabled={busy==='archive'} onClick={generateArchive}>{busy==='archive'?'Building ZIP…':'Generate contract ZIP'}</button>{handoff.archive_generated_at&&<span className="muted">Last generated {date(handoff.archive_generated_at)}</span>}</div></section>
- <section className="panel"><div className="section-head"><div><p className="eyebrow">04 · Checklist</p><h2>Transfer & closeout</h2></div><span className="status">{tasks.filter(t=>t.status==='complete'||t.status==='not_applicable').length}/{tasks.length}</span></div><div className="handoff-task-list">{tasks.map(task=><article className={'handoff-task '+task.status} key={task.id}><div><b>{task.title}</b><small>{label(task.category)}{task.required?' · Required':' · Optional'}{task.completed_at?' · '+date(task.completed_at):''}</small></div><select value={task.status} disabled={busy===task.id||task.task_key==='aftercare_started'} onChange={e=>setTaskStatus(task,e.target.value as HandoffTask['status'])}><option value="pending">Pending</option><option value="complete">Complete</option>{!task.required&&<option value="not_applicable">N/A</option>}</select></article>)}</div></section>
- <section className="panel handoff-start"><div><p className="eyebrow">05 · Start the clock</p><h2>Begin included aftercare</h2><p className="muted">This sets aftercare to 30 calendar days and the data-retention deadline to 30 additional calendar days.</p></div><button className="primary" disabled={busy==='aftercare'||Boolean(handoff.effective_at)} onClick={startAftercare}>{handoff.effective_at?'Aftercare started '+date(handoff.effective_at):busy==='aftercare'?'Starting…':'Start 30-day aftercare'}</button></section>
- </section><aside><section className="panel"><p className="eyebrow">Lifecycle rules</p><h2>What happens next</h2><div className="handoff-stage-grid"><div><b>Day 0</b><span>Required transfers complete; aftercare begins.</span></div><div><b>Day 30</b><span>Text the client, remove SRCcvde admin access, begin retention-only period.</span></div><div><b>Day 60</b><span>Disable client workspace access and erase Client Project Data except permitted business records.</span></div></div></section><section className="panel"><p className="eyebrow">Deletion boundary</p><p className="muted">Executed contracts and other business records that must be retained for legal, accounting, insurance, or dispute purposes are outside the Client Project Data deletion promise. The signed Data Retention Agreement states this explicitly.</p></section></aside></div></>
-}
-
-function ClientHandoffPage(){
- const[handoff,setHandoff]=useState<Handoff|null>(null),[tasks,setTasks]=useState<HandoffTask[]>([]),[client,setClient]=useState<Client|null>(null),[busy,setBusy]=useState(false),[message,setMessage]=useState('')
- const load=async()=>{const{data:cms}=await supabase.from('client_memberships').select('client_id').limit(1);const clientId=cms?.[0]?.client_id;if(!clientId)return;const[c,h]=await Promise.all([supabase.from('clients').select('*').eq('id',clientId).single(),supabase.from('client_handoffs').select('*').eq('client_id',clientId).maybeSingle()]);setClient(c.data as Client);const row=h.data as Handoff|null;setHandoff(row);if(row){const{data}=await supabase.from('handoff_tasks').select('*').eq('handoff_id',row.id).order('position');setTasks((data||[]) as HandoffTask[])}}
- useEffect(()=>{void load()},[])
- async function archive(){if(!handoff)return;setBusy(true);setMessage('');const{data,error}=await supabase.functions.invoke('handoff-contract-archive',{body:{client_id:handoff.client_id}});setBusy(false);if(error||!data?.url){setMessage(data?.error||error?.message||'Could not create your archive.');return}window.open(data.url,'_blank','noopener,noreferrer');setMessage(data.document_count+' executed document'+(data.document_count===1?'':'s')+' packaged. Save the ZIP somewhere you control before your retention deadline.');await load()}
- if(!handoff)return <><PageTitle eyebrow="Handoff" title="Project closeout" copy="Your formal handoff timeline will appear here when SRCcvde starts the closeout process."/><section className="panel attention-clear"><span>✓</span><div><h2>No handoff is active yet.</h2><p className="muted">Your current project workspace remains unchanged.</p></div></section></>
- return <><PageTitle eyebrow="Handoff" title={(client?.name||'Your project')+' closeout'} copy="Track ownership transfer, included aftercare, your archive window, and SRCcvde access removal." />{message&&<p className="success-message">{message}</p>}<section className="handoff-summary-grid"><article><small>Status</small><strong>{label(handoff.status)}</strong><span>{handoff.effective_at?'Effective '+date(handoff.effective_at):'Handoff preparations in progress'}</span></article><article><small>Aftercare ends</small><strong>{handoff.aftercare_ends_at?date(handoff.aftercare_ends_at):'Not started'}</strong><span>30 calendar days included</span></article><article><small>Data deletion date</small><strong>{handoff.retention_ends_at?date(handoff.retention_ends_at):'Not set'}</strong><span>Download everything you want to keep before this date.</span></article></section>{handoff.meeting_at&&<section className="panel"><div className="section-head"><div><p className="eyebrow">Handoff meeting</p><h2>{date(handoff.meeting_at)}</h2></div>{handoff.meeting_url&&<a className="button-link" href={handoff.meeting_url} target="_blank" rel="noreferrer">Open Zoom →</a>}</div><p className="muted">Verified transfer email: {handoff.verification_email||'Still being confirmed'}</p></section>}<section className="panel"><div className="section-head"><div><p className="eyebrow">Your archive</p><h2>Keep your own contract copy</h2><p className="section-copy">This ZIP contains the fully executed PDFs available in your document vault plus a SHA-256 manifest.</p></div></div><button className="primary inline" disabled={busy} onClick={archive}>{busy?'Building ZIP…':'Download contract archive'}</button>{handoff.archive_generated_at&&<p className="muted">Archive last generated {date(handoff.archive_generated_at)}. Each download link expires after one hour.</p>}</section><section className="panel"><div className="section-head"><div><p className="eyebrow">Handoff checklist</p><h2>Progress</h2></div><span className="status">{tasks.filter(t=>t.status==='complete'||t.status==='not_applicable').length}/{tasks.length}</span></div><div className="handoff-task-list">{tasks.map(task=><article className={'handoff-task '+task.status} key={task.id}><div><b>{task.title}</b><small>{label(task.category)}{task.status==='not_applicable'?' · Not applicable':task.completed_at?' · Completed '+date(task.completed_at):' · Pending'}</small></div><StatusPill value={task.status==='not_applicable'?'archived':task.status}/></article>)}</div></section><section className="panel"><p className="eyebrow">Retention reminder</p><h2>Your copy matters.</h2><p className="muted">After the post-aftercare retention window ends, SRCcvde will remove Client Project Data from active systems and disable your SRCcvde workspace access. Executed contracts and other limited business records may be retained when needed for legal, accounting, insurance, or dispute purposes.</p></section></>
-}
-function PageTitle({eyebrow,title,copy}:{eyebrow:string;title:string;copy:string}){return <header className="page-title"><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p>{copy}</p></header>}
-function Fact({k,v}:{k:string;v:string}){return <div><small>{k}</small><b>{v}</b></div>}
-function RecordCard({title,count,detail}:{title:string;count:number;detail:string}){return <article><small>{title}</small><strong>{count}</strong><span>{detail}</span></article>}
-
-function ApplicantTimeline({inquiry}:{inquiry:Inquiry}){
- const flow=['application','discovery','proposal','contract','kickoff']
- const current=inquiry.status==='discovery'?1:inquiry.status==='proposal'?2:inquiry.status==='contract'?3:inquiry.status==='won'?4:0
- return <section className="timeline-card"><div className="section-head"><div><p className="eyebrow">Your journey</p><h2>{current===0?'Application received':current===1?'Discovery':current===2?'Proposal':current===3?'Contract':'Project kickoff'}</h2></div><span className="status">{label(inquiry.status)}</span></div><div className="timeline">{flow.map((s,i)=><div className={i<current?'done':i===current?'current':''} key={s}><i/><b>{label(s)}</b><small>{i<current?'Complete':i===current?'Current step':'Upcoming'}</small></div>)}</div></section>
-}
-
-function SignatureCard({request,navigate}:{request:SignatureRequest;navigate:(p:string)=>void}){return <button className="signature-card" onClick={()=>navigate('/documents/'+request.id)}><div><span className="signature-icon">✦</span><div><b>{request.signature_kind==='signature'?'Signature required':'Acknowledgment required'}</b><small>{request.signer_name} · requested {date(request.requested_at)}</small></div></div><span>Review →</span></button>}
-
-function SignDocumentPage({requestId,navigate,staffPreview=false}:{requestId:string;navigate:(p:string)=>void;staffPreview?:boolean}){
- const[request,setRequest]=useState<SignatureRequest|null>(null),[version,setVersion]=useState<DocumentVersion|null>(null),[doc,setDoc]=useState<DocumentRow|null>(null),[legalName,setLegalName]=useState(''),[consent,setConsent]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState('')
- useEffect(()=>{(async()=>{if(staffPreview){const{data,error}=await supabase.rpc('get_staff_signature_preview',{p_request_id:requestId});if(error){setMessage(error.message);return}const preview=data as {request:SignatureRequest;version:DocumentVersion;document:DocumentRow};setRequest(preview.request);setVersion(preview.version);setDoc(preview.document);return}const{data:r}=await supabase.from('signature_requests').select('*').eq('id',requestId).single();if(!r)return;setRequest(r as SignatureRequest);const[v,d]=await Promise.all([supabase.from('document_versions').select('*').eq('id',r.document_version_id).single(),supabase.from('client_documents').select('*').eq('id',r.document_id).single()]);setVersion(v.data as DocumentVersion);setDoc(d.data as DocumentRow);const{error:viewError}=await supabase.rpc('mark_signature_viewed',{p_request_id:requestId});if(viewError)console.error('Could not record document view',viewError)})()},[requestId,staffPreview])
- async function sign(){if(!request)return;setBusy(true);setMessage('Recording your action…');const{error}=await supabase.rpc('sign_document',{p_request_id:requestId,p_legal_name:legalName,p_signature_value:legalName,p_consent:consent});if(error){setBusy(false);setMessage(error.message);return}const signedAt=new Date().toISOString();setRequest({...request,status:'signed',legal_name:legalName,signed_at:signedAt});setBusy(false);setMessage(request.signature_kind==='signature'?'Signed successfully. SRCcvde has been notified.':'Acknowledgment recorded. Finalizing your secure document in the background…');void (async()=>{if(request.signature_kind==='acknowledgment'){const{error:finalError}=await supabase.functions.invoke('finalize-executed-document',{body:{document_id:request.document_id}});if(finalError)setMessage('Acknowledgment recorded. Your secure PDF archive is still finalizing.');else setMessage('Acknowledgment recorded. Your secure document is finalized and archived.')}await supabase.functions.invoke('dispatch-notifications')})()}
- if(!request||!version||!doc)return <p className="muted">Opening secure document…</p>
- const complete=request.status==='signed'
- return <section className="review-v2">
-  <div className="review-v2-top"><button className="back" onClick={()=>navigate('/')}>← Workspace</button><span className="review-v2-badge">{staffPreview?'Staff preview':'Secure document'}</span></div>
-  <header className="review-v2-title"><p className="eyebrow">Secure document · version {version.version_number}</p><h1>{doc.name}</h1><p>Review the exact immutable document below, then complete the requested action.</p></header>
-  <div className="review-v2-stack">
-   <article className="review-v2-document">
-    <header className="review-v2-dochead"><div className="review-v2-brand"><Brand/><small>Digital document services</small></div><span className={complete?'review-v2-status complete':'review-v2-status pending'}>{complete?'Completed':'Pending review'}</span></header>
-    <div className="review-v2-version"><div><small>Document integrity</small><b>Exact immutable version</b></div><span>Version {version.version_number}</span></div>
-    <div className="review-v2-text">{version.content_snapshot}</div>
-    <footer><div><span>SHA-256 fingerprint</span><small>This identifier verifies the exact document version you reviewed.</small></div><code>{version.content_sha256}</code></footer>
-   </article>
-   <section className="review-v2-action">
-    <div><p className="eyebrow">{request.signature_kind==='signature'?'Electronic signature':'Acknowledgment'}</p>{complete?<><h2>Completed.</h2><p className="muted">Recorded as {request.legal_name}{request.signed_at?' on '+date(request.signed_at):''}.</p></>:<><h2>{request.signature_kind==='signature'?'Sign this document':'Confirm your review'}</h2><p className="review-v2-consent">{request.consent_text}</p></>}</div>
-    {!complete&&!staffPreview&&<div className="review-v2-form"><label>Legal name<input value={legalName} onChange={e=>setLegalName(e.target.value)} placeholder={request.signer_name}/></label><label className="check-row"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/><span>I agree to the electronic signing statement above.</span></label><button className="primary" disabled={busy||!consent||legalName.trim().length<2} onClick={sign}>{busy?'Recording…':request.signature_kind==='signature'?'Sign & Accept':'Reviewed & Acknowledged'}</button></div>}
-    {staffPreview&&<p className="fine">Staff preview only. This does not record a signer view and staff cannot sign on the client's behalf.</p>}{message&&<p className="success-message">{message}</p>}{!staffPreview&&<p className="fine">Your action is recorded against this exact immutable document version and its cryptographic fingerprint.</p>}
-   </section>
-  </div>
- </section>
-}
-
-function ClientDashboard({profile,navigate}:{profile:Profile|null;navigate:(p:string)=>void}){
- const[inquiry,setInquiry]=useState<Inquiry|null>(null),[client,setClient]=useState<(Client&{portal_unlocked?:boolean})|null>(null),[projects,setProjects]=useState<Project[]>([]),[milestones,setMilestones]=useState<Milestone[]>([]),[requests,setRequests]=useState<SignatureRequest[]>([]),[docs,setDocs]=useState<DocumentRow[]>([]),[actions,setActions]=useState<ClientAction[]>([])
- useEffect(()=>{(async()=>{const[{data:ims},{data:cms}]=await Promise.all([supabase.from('inquiry_memberships').select('inquiry_id').limit(1),supabase.from('client_memberships').select('client_id').limit(1)]);const inquiryId=ims?.[0]?.inquiry_id,clientId=cms?.[0]?.client_id;if(inquiryId){const{data}=await supabase.from('project_inquiries').select('*').eq('id',inquiryId).single();setInquiry(data as Inquiry)}if(!clientId)return;const[c,p,d,r,x]=await Promise.all([supabase.from('clients').select('*').eq('id',clientId).single(),supabase.from('projects').select('*').eq('client_id',clientId).order('created_at',{ascending:false}),supabase.from('client_documents').select('*').eq('client_id',clientId).eq('client_visible',true).order('created_at',{ascending:false}),supabase.from('signature_requests').select('*').eq('client_id',clientId).eq('signer_side','client').order('requested_at',{ascending:false}),supabase.from('client_action_requests').select('*').eq('client_id',clientId).eq('client_visible',true).order('created_at',{ascending:false})]);setClient(c.data as Client&{portal_unlocked?:boolean});const ps=(p.data||[]) as Project[];setProjects(ps);setDocs((d.data||[]) as DocumentRow[]);setRequests((r.data||[]) as SignatureRequest[]);setActions((x.data||[]) as ClientAction[]);if(ps.length){const{data:ms}=await supabase.from('project_milestones').select('*').in('project_id',ps.map(v=>v.id)).eq('client_visible',true).order('position');setMilestones((ms||[]) as Milestone[])}else setMilestones([])})()},[])
- const first=profile?.full_name?' '+profile.full_name.split(' ')[0]:'',pending=requests.filter(r=>r.status==='pending'),openActions=actions.filter(a=>a.status!=='completed'),needsYou=pending.length+openActions.length
- const activeProject=projects.find(p=>!['completed','archived'].includes(p.status))||projects[0]||null
- const activeMilestones=activeProject?milestones.filter(m=>m.project_id===activeProject.id):[],completed=activeMilestones.filter(m=>m.status==='completed').length
- const progress=activeMilestones.length?Math.round(completed/activeMilestones.length*100):(activeProject?.progress||0)
- const current=activeMilestones.find(m=>m.status==='blocked')||activeMilestones.find(m=>m.status==='current')||activeMilestones.find(m=>m.status==='upcoming')||null,next=current?activeMilestones.find(m=>m.position>current.position&&m.status==='upcoming')||null:null
- return <><header className="topbar"><div><p className="eyebrow">{client?.portal_unlocked?'Client workspace':'Project journey'}</p><h1>Welcome{first}.</h1></div><span className="live-dot">Secure workspace</span></header>
- {needsYou>0&&<section className="attention"><div><p className="eyebrow">Needs you</p><h2>{needsYou===1?'One item needs your attention.':needsYou+' items need your attention.'}</h2></div><div className="attention-list">{pending.map(r=><SignatureCard key={r.id} request={r} navigate={navigate}/>)}{openActions.slice(0,3).map(a=><article className="attention-item" key={a.id}><div className="attention-mark">→</div><div><b>{a.title}</b><small>{a.due_at?'Due '+date(a.due_at):'Client action request'}</small>{a.description&&<p className="muted">{a.description}</p>}</div><button className="ghost" onClick={()=>navigate('/actions')}>Review →</button></article>)}</div>{openActions.length>3&&<button className="ghost inline" onClick={()=>navigate('/actions')}>View all {openActions.length} requests →</button>}</section>}
- {!client&&inquiry&&<ApplicantTimeline inquiry={inquiry}/>}
- {client&&!client.portal_unlocked&&<><section className="timeline-card"><div className="section-head"><div><p className="eyebrow">Pre-project workspace</p><h2>{activeProject?.phase?label(activeProject.phase):'Contract'}</h2></div><span className="status">Workspace unlocks after execution</span></div></section><section className="two-col"><article className="panel client-doc-summary" role="button" tabIndex={0} onClick={()=>navigate('/documents')}><p className="eyebrow">Documents</p><h2>{docs.length} shared</h2><p className="muted">Proposals, scope and agreements stay attached to your project journey.</p><span className="summary-link">Open document vault →</span></article><article className="panel"><p className="eyebrow">What happens next</p><h2>One account. No restart.</h2><p className="muted">Once the agreement is fully executed, this workspace opens into your project dashboard.</p></article></section></>}
- {client?.portal_unlocked&&activeProject&&<><section className="timeline-card project-hero"><div className="section-head"><div><p className="eyebrow">{projects.length>1?'Active projects · '+projects.length:'Current project'}</p><h2>{activeProject.name}</h2><p className="muted">{activeProject.project_type?label(activeProject.project_type):'Custom project'}{projects.length>1?' · Your most active build is shown here':''}</p></div><StatusPill value={activeProject.status}/></div><div className="client-progress"><div><span>{label(activeProject.phase)}</span><strong>{progress}%</strong></div><div className="progress"><i style={{width:progress+'%'}}/></div></div>{projects.length>1&&<button className="ghost inline" onClick={()=>navigate('/project')}>View all projects →</button>}</section>
-  <section className="two-col"><article className="panel"><p className="eyebrow">Right now</p><h2>{current?.title||(progress>=100?"Project complete.":"Work is getting underway.")}</h2><p className="muted">{current?.description||(progress>=100?"Your visible project milestones are complete.":"Your project focus will appear here as the roadmap advances.")}</p></article><article className="panel"><p className="eyebrow">Up next</p><h2>{next?.title||(progress>=100?"Project complete":"To be scheduled")}</h2><p className="muted">{next?.description||(progress>=100?"Your completed materials remain available.":"SRCcvde will update this as the roadmap advances.")}</p></article></section><section className="panel client-doc-summary" role="button" tabIndex={0} onClick={()=>navigate('/documents')}><p className="eyebrow">Document vault</p><h2>{docs.length} available</h2><p className="muted">Files across all of your SRCcvde projects stay together.</p><span className="summary-link">Open document vault →</span></section></>}
- {!inquiry&&!client&&<Empty>Your workspace is being prepared.</Empty>}</>
-}
-
-function ClientProjectPage(){
- const[projects,setProjects]=useState<Project[]>([]),[projectId,setProjectId]=useState(''),[milestones,setMilestones]=useState<Milestone[]>([]),[loading,setLoading]=useState(true)
- useEffect(()=>{(async()=>{const{data:cms}=await supabase.from('client_memberships').select('client_id').limit(1);const clientId=cms?.[0]?.client_id;if(!clientId){setLoading(false);return}const{data:p}=await supabase.from('projects').select('*').eq('client_id',clientId).order('created_at',{ascending:false});const ps=(p||[]) as Project[];setProjects(ps);setProjectId(ps.find(v=>!['completed','archived'].includes(v.status))?.id||ps[0]?.id||'');setLoading(false)})()},[])
- useEffect(()=>{if(!projectId){setMilestones([]);return}supabase.from('project_milestones').select('*').eq('project_id',projectId).eq('client_visible',true).order('position').then(({data})=>setMilestones((data||[]) as Milestone[]))},[projectId])
- const project=projects.find(p=>p.id===projectId)||null
- if(loading)return <p className="muted">Loading projects…</p>
- if(!project)return <><PageTitle eyebrow="Projects" title="Your projects" copy="Your project workspaces will appear here when your builds begin."/><Empty>No active project yet.</Empty></>
- const completed=milestones.filter(m=>m.status==='completed').length,progress=milestones.length?Math.round(completed/milestones.length*100):project.progress,current=milestones.find(m=>m.status==='blocked')||milestones.find(m=>m.status==='current')||milestones.find(m=>m.status==='upcoming')||null,next=current?milestones.find(m=>m.position>current.position&&m.status!=='completed')||null:null
- return <><PageTitle eyebrow="Projects" title={project.name} copy="Switch between your SRCcvde projects without leaving your workspace."/>
- {projects.length>1&&<section className="panel project-switcher"><div className="section-head"><div><p className="eyebrow">Your projects</p><h2>Choose a workspace</h2></div></div><div className="project-switcher-list">{projects.map(p=><button className={p.id===projectId?'active':''} onClick={()=>setProjectId(p.id)} key={p.id}><span><b>{p.name}</b><small>{p.project_type?label(p.project_type):'Custom project'} · {label(p.phase)}</small></span><StatusPill value={p.status}/></button>)}</div></section>}
- <section className="timeline-card project-hero"><div className="section-head"><div><p className="eyebrow">Live progress</p><h2>{label(project.phase)}</h2></div><StatusPill value={project.status}/></div><div className="client-progress"><div><span>{completed} of {milestones.length} milestones complete</span><strong>{progress}%</strong></div><div className="progress"><i style={{width:progress+'%'}}/></div></div></section>
- <section className="project-now-grid"><article className="panel"><p className="eyebrow">Current focus</p><h2>{current?.title||'Roadmap complete'}</h2><p className="muted">{current?.description||(progress>=100?'Your visible milestones are complete.':'Your next milestone is being prepared.')}</p></article><article className="panel"><p className="eyebrow">Up next</p><h2>{next?.title||(progress>=100?'Project complete':'To be scheduled')}</h2><p className="muted">{next?.description||(progress>=100?'Your completed materials remain available.':'SRCcvde will update this as the roadmap advances.')}</p></article></section>
- <section className="panel milestone-panel"><div className="section-head"><div><p className="eyebrow">Roadmap</p><h2>Where this build stands.</h2></div><span className="status">{label(project.phase)}</span></div><div className="client-milestone-list">{milestones.length?milestones.map((m,n)=><div className={'client-milestone '+(m.status==='completed'?'done':m.status==='blocked'?'blocked':m.status==='current'?'current':'')} key={m.id}><div className="milestone-index">{m.status==='completed'?'✓':String(n+1).padStart(2,'0')}</div><div className="milestone-copy"><b>{m.title}</b><small>{m.description||label(m.status)}</small></div><div className="milestone-meta"><StatusPill value={m.status}/>{m.due_at&&<small>Due {date(m.due_at)}</small>}</div></div>):<Empty>Your roadmap is being prepared.</Empty>}</div></section></>
-}
-
-function ClientActivityPage(){
- const[events,setEvents]=useState<{id:string;projectId:string|null;projectName:string;title:string;detail:string;at:string;kind:'project'|'milestone'|'document'}[]>([]),[projects,setProjects]=useState<Project[]>([]),[projectId,setProjectId]=useState('all'),[loading,setLoading]=useState(true),[query,setQuery]=useState(''),[view,setView]=useState('all'),[range,setRange]=useState('all')
- useEffect(()=>{(async()=>{const{data:cms}=await supabase.from('client_memberships').select('client_id').limit(1);const clientId=cms?.[0]?.client_id;if(!clientId){setLoading(false);return}const[{data:ps},{data:docs},{data:reqs}]=await Promise.all([supabase.from('projects').select('*').eq('client_id',clientId).order('created_at',{ascending:false}),supabase.from('client_documents').select('*').eq('client_id',clientId).eq('client_visible',true),supabase.from('signature_requests').select('*').eq('client_id',clientId).eq('signer_side','client')]);const projects=(ps||[]) as Project[];setProjects(projects);let ms:Milestone[]=[];if(projects.length){const{data}=await supabase.from('project_milestones').select('*').in('project_id',projects.map(p=>p.id)).eq('client_visible',true);ms=(data||[]) as Milestone[]}const name=(id:any)=>projects.find(p=>p.id===id)?.name||'General';const out:any[]=[];(docs||[]).forEach((d:any)=>out.push({id:'d'+d.id,projectId:d.project_id||null,projectName:name(d.project_id),title:d.name+' shared',detail:label(d.category)+' added to your document vault',at:d.created_at,kind:'document'}));(reqs||[]).forEach((q:any)=>out.push({id:'r'+q.id,projectId:q.project_id||null,projectName:name(q.project_id),title:q.status==='signed'?'Document completed':'Review requested',detail:q.status==='signed'?'Your document action was recorded':'A document is waiting for your review',at:q.signed_at||q.requested_at,kind:'document'}));ms.filter(m=>m.completed_at).forEach(m=>out.push({id:'m'+m.id,projectId:m.project_id,projectName:name(m.project_id),title:m.title+' completed',detail:'Project milestone completed',at:m.completed_at!,kind:'milestone'}));projects.forEach(p=>out.push({id:'p'+p.id,projectId:p.id,projectName:p.name,title:'Project workspace created',detail:p.name,at:p.created_at,kind:'project'}));out.sort((a,b)=>new Date(b.at).getTime()-new Date(a.at).getTime());setEvents(out);setLoading(false)})()},[])
- const visibleEvents=events.filter(e=>{const q=query.trim().toLowerCase(),cutoff=range==='all'?0:Date.now()-Number(range)*86400000;return(!q||[e.title,e.detail,e.projectName].some(v=>v.toLowerCase().includes(q)))&&(view==='all'||e.kind===view)&&(projectId==='all'||e.projectId===projectId)&&(!cutoff||new Date(e.at).getTime()>=cutoff)})
- return <><PageTitle eyebrow="Activity" title="Project history" copy="One timeline across every SRCcvde project, with project-level filtering when you need it."/><section className="panel"><div className="directory-tools"><label>Search activity<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Milestone, document, project…"/></label>{projects.length>1&&<label>Project<select value={projectId} onChange={e=>setProjectId(e.target.value)}><option value="all">All projects</option>{projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>}<label>Type<select value={view} onChange={e=>setView(e.target.value)}><option value="all">All activity</option><option value="project">Project</option><option value="milestone">Milestones</option><option value="document">Documents</option></select></label><label>Time range<select value={range} onChange={e=>setRange(e.target.value)}><option value="all">All time</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option></select></label><span className="directory-count">{visibleEvents.length} of {events.length}</span></div></section><section className="panel activity-panel">{loading?<p className="muted">Loading activity…</p>:visibleEvents.length?visibleEvents.map(e=><div className="activity-item" key={e.id}><i/><div><b>{e.title}</b><small>{date(e.at)} · {projects.length>1?e.projectName+' · ':''}{e.detail}</small></div></div>):<Empty>{events.length?'No activity matches this view.':'No project activity yet.'}</Empty>}</section></>
-}
-
-function ClientActionsPage({navigate}:{navigate:(p:string)=>void}){
- const[actions,setActions]=useState<ClientAction[]>([]),[signatures,setSignatures]=useState<SignatureRequest[]>([]),[invoices,setInvoices]=useState<BillingInvoice[]>([]),[projects,setProjects]=useState<Project[]>([]),[docs,setDocs]=useState<DocumentRow[]>([]),[busy,setBusy]=useState(''),[message,setMessage]=useState(''),[loading,setLoading]=useState(true)
- const load=async()=>{setLoading(true);const[a,r,i,p,d]=await Promise.all([supabase.from('client_action_requests').select('*').eq('client_visible',true).order('created_at',{ascending:false}),supabase.from('signature_requests').select('*').eq('signer_side','client').eq('status','pending').order('requested_at',{ascending:false}),supabase.from('billing_invoices').select('*,projects(name)').eq('client_visible',true).in('status',['sent','overdue']).order('due_at',{ascending:true}),supabase.from('projects').select('*'),supabase.from('client_documents').select('*').eq('client_visible',true)]);if(a.error)setMessage(a.error.message);setActions((a.data||[]) as ClientAction[]);setSignatures((r.data||[]) as SignatureRequest[]);setInvoices((i.data||[]) as BillingInvoice[]);setProjects((p.data||[]) as Project[]);setDocs((d.data||[]) as DocumentRow[]);setLoading(false)}
- useEffect(()=>{load()},[])
- async function complete(a:ClientAction){setBusy(a.id);setMessage('');const{error}=await supabase.rpc('complete_client_action_request',{p_action_id:a.id});setBusy('');if(error)setMessage(error.message);else{setMessage('Action completed.');await supabase.functions.invoke('dispatch-notifications');load()}}
- const open=actions.filter(a=>a.status!=='completed'),done=actions.filter(a=>a.status==='completed'),now=Date.now()
- const projectName=(id:string|null)=>projects.find(p=>p.id===id)?.name||''
- const documentName=(id:string)=>docs.find(d=>d.id===id)?.name||'Document'
- const remaining=(inv:BillingInvoice)=>Math.max(0,inv.total_cents-inv.amount_paid_cents)
- const overdueInvoices=invoices.filter(inv=>Boolean(inv.due_at&&new Date(inv.due_at).getTime()<now&&remaining(inv)>0))
- const dueActions=open.filter(a=>Boolean(a.due_at&&new Date(a.due_at).getTime()<now))
- const attentionCount=signatures.length+open.length+invoices.filter(inv=>remaining(inv)>0).length
- return <><PageTitle eyebrow="Attention center" title="What needs you" copy="Signatures, requests and open balances are prioritized here so nothing gets buried." />{message&&<p className="success-message">{message}</p>}
- <section className="attention-summary"><article><small>Needs you</small><strong>{loading?'—':attentionCount}</strong><span>{attentionCount?'Open items across your workspace':'You’re all caught up'}</span></article><article><small>Signatures</small><strong>{loading?'—':signatures.length}</strong><span>{signatures.length?'Ready for review':'Nothing waiting'}</span></article><article><small>Past due</small><strong>{loading?'—':dueActions.length+overdueInvoices.length}</strong><span>{dueActions.length+overdueInvoices.length?'Worth handling first':'Nothing overdue'}</span></article></section>
- {signatures.length>0&&<section className="panel attention-section priority"><div className="section-head"><div><p className="eyebrow">Documents</p><h2>Ready for your review</h2></div><span className="attention-count">{signatures.length}</span></div><div className="attention-list">{signatures.map(r=><article className="attention-item" key={r.id}><div className="attention-mark">✦</div><div><b>{documentName(r.document_id)}</b><small>{r.signature_kind==='signature'?'Signature required':'Acknowledgment required'}{projectName(r.project_id)?' · '+projectName(r.project_id):''} · Requested {date(r.requested_at)}</small></div><button className="primary inline" onClick={()=>navigate('/documents/'+r.id)}>Review →</button></article>)}</div></section>}
- {open.length>0&&<section className="panel attention-section"><div className="section-head"><div><p className="eyebrow">Requests</p><h2>Things SRCcvde needs from you</h2></div><span className="attention-count">{open.length}</span></div><div className="attention-list">{open.map(a=>{const overdue=Boolean(a.due_at&&new Date(a.due_at).getTime()<now);return <article className={'attention-item '+(overdue?'urgent':'')} key={a.id}><div className="attention-mark">{overdue?'!':'→'}</div><div><b>{a.title}</b><small>{label(a.action_type)}{projectName(a.project_id)?' · '+projectName(a.project_id):''}{a.due_at?' · '+(overdue?'Past due ':'Due ')+date(a.due_at):''}</small>{a.description&&<p className="muted">{a.description}</p>}</div><button className="ghost" disabled={busy===a.id} onClick={()=>complete(a)}>{busy===a.id?'Saving…':'Mark complete'}</button></article>})}</div></section>}
- {invoices.some(inv=>remaining(inv)>0)&&<section className="panel attention-section"><div className="section-head"><div><p className="eyebrow">Billing</p><h2>Open balances</h2></div><button className="ghost" onClick={()=>navigate('/billing')}>Open billing →</button></div><div className="attention-list">{invoices.filter(inv=>remaining(inv)>0).map(inv=>{const overdue=Boolean(inv.due_at&&new Date(inv.due_at).getTime()<now);return <article className={'attention-item '+(overdue?'urgent':'')} key={inv.id}><div className="attention-mark">$</div><div><b>{money(remaining(inv),inv.currency)} remaining</b><small>{inv.invoice_number}{inv.projects?.name?' · '+inv.projects.name:''}{inv.due_at?' · '+(overdue?'Past due ':'Due ')+date(inv.due_at):''}</small></div><button className="ghost" onClick={()=>navigate('/billing')}>View invoice →</button></article>})}</div></section>}
- {!loading&&!attentionCount&&<section className="panel attention-clear"><span>✓</span><div><p className="eyebrow">All clear</p><h2>You’re caught up.</h2><p className="muted">There are no signatures, requests, or open balances waiting for you.</p></div></section>}
- {done.length>0&&<section className="panel completed-actions"><div className="section-head"><div><p className="eyebrow">Completed</p><h2>Recent requests</h2></div></div>{done.slice(0,8).map(a=><div className="doc-row" key={a.id}><div><b>{a.title}</b><small>{projectName(a.project_id)?projectName(a.project_id)+' · ':''}Completed{a.completed_at?' · '+date(a.completed_at):''}</small></div><StatusPill value="completed"/></div>)}</section>}</>
-}
-function ClientMessagesPage(){
- const DRAFT_KEY='srccvde:client-message-draft'
- const readDraft=()=>{try{return JSON.parse(localStorage.getItem(DRAFT_KEY)||'{}')}catch{return {}}}
- const[items,setItems]=useState<Communication[]>([]),[projects,setProjects]=useState<Project[]>([]),[clientId,setClientId]=useState(''),[projectId,setProjectId]=useState(()=>readDraft().projectId||''),[body,setBody]=useState(()=>readDraft().body||''),[busy,setBusy]=useState(false),[message,setMessage]=useState('')
- useEffect(()=>{if(body.trim())localStorage.setItem(DRAFT_KEY,JSON.stringify({body,projectId}));else localStorage.removeItem(DRAFT_KEY)},[body,projectId])
- const load=async()=>{const{data:cms,error:membershipError}=await supabase.from('client_memberships').select('client_id').limit(1);if(membershipError){setMessage(membershipError.message);return}const cid=cms?.[0]?.client_id||'';setClientId(cid);if(!cid)return;const[{data:rows,error},{data:ps}]=await Promise.all([supabase.from('client_communications').select('*').eq('client_id',cid).eq('client_visible',true).order('created_at',{ascending:true}),supabase.from('projects').select('*').eq('client_id',cid).order('created_at',{ascending:false})]);if(error)setMessage(error.message);else setItems((rows||[]) as Communication[]);const projects=(ps||[]) as Project[];setProjects(projects);setProjectId((current:string)=>current||projects.find(p=>!['completed','archived'].includes(p.status))?.id||projects[0]?.id||'')}
- useEffect(()=>{load()},[])
- async function send(e:FormEvent){e.preventDefault();if(!body.trim()||!clientId||(!projectId&&projects.length))return;setBusy(true);setMessage('');const{data:{user}}=await supabase.auth.getUser();const{error}=await supabase.from('client_communications').insert({client_id:clientId,project_id:projectId||null,channel:'portal',direction:'inbound',subject:null,body:body.trim(),created_by:user?.id||null,client_visible:true,delivery_status:'logged'});setBusy(false);if(error)setMessage(error.message);else{localStorage.removeItem(DRAFT_KEY);setBody('');await supabase.functions.invoke('dispatch-notifications');await load()}}
- const visible=projects.length>1?items.filter(c=>c.project_id===projectId||!c.project_id):items
- const projectName=(id:any)=>projects.find(p=>p.id===id)?.name
- return <><PageTitle eyebrow="Messages" title="Conversation" copy="Keep each project conversation attached to the work it belongs to." />{message&&<p className="success-message">{message}</p>}{projects.length>1&&<section className="panel message-project-picker"><label>Project conversation<select value={projectId} onChange={e=>setProjectId(e.target.value)}>{projects.map(p=><option value={p.id} key={p.id}>{p.name}</option>)}</select></label></section>}<section className="panel communications-panel"><div className="communication-history">{visible.length?visible.map(c=><article className={'communication-row '+(c.direction==='inbound'?'client-message':'staff-message')} key={c.id}><div className="communication-meta"><span className="communication-channel">{c.direction==='inbound'?'You':label(c.channel)}</span><small>{date(c.created_at)}{projects.length>1&&c.project_id?' · '+projectName(c.project_id):''}</small></div><div>{c.subject&&<b>{c.subject}</b>}<p>{c.body}</p></div></article>):<div className="communication-empty"><b>No messages yet</b><p>This project conversation will appear here.</p></div>}</div><form className="communication-form" onSubmit={send}><label>Reply<textarea value={body} onChange={e=>setBody(e.target.value)} placeholder="Write a message to SRCcvde…" required maxLength={5000}/></label><div className="communication-form-footer"><small>{body.length}/5000</small><button className="primary inline" disabled={busy||!body.trim()}>{busy?'Sending…':'Send message'}</button></div></form></section></>
-}
-
-function ClientDeliverablesPage(){
- const[items,setItems]=useState<any[]>([]),[message,setMessage]=useState(''),[busy,setBusy]=useState(''),[clientId,setClientId]=useState(''),[projectId,setProjectId]=useState(''),[projects,setProjects]=useState<Project[]>([]),[name,setName]=useState(''),[description,setDescription]=useState(''),[category,setCategory]=useState('branding'),[file,setFile]=useState<File|null>(null),[view,setView]=useState('all'),[query,setQuery]=useState('')
- const load=async()=>{const{data:cms}=await supabase.from('client_memberships').select('client_id').limit(1);const cid=cms?.[0]?.client_id||'';setClientId(cid);if(!cid)return;const[{data:projectRows},{data,error}]=await Promise.all([supabase.from('projects').select('*').eq('client_id',cid).order('created_at'),supabase.from('project_deliverables').select('*').eq('client_id',cid).eq('client_visible',true).order('created_at',{ascending:false})]);setProjects((projectRows||[]) as Project[]);setProjectId(current=>current||projectRows?.[0]?.id||'');if(error)setMessage(error.message);else setItems(data||[])}
- useEffect(()=>{load()},[])
- async function download(item:any){setBusy(item.id);setMessage('');const{data,error}=await supabase.functions.invoke('project-file-download',{body:{deliverable_id:item.id}});setBusy('');if(error||!data?.url){setMessage(data?.error||error?.message||'Could not open this file.');return}window.open(data.url,'_blank','noopener,noreferrer')}
- async function upload(e:FormEvent){e.preventDefault();if(!file||!clientId||!projectId)return;const validation=validateProjectFile(file);if(validation)return setMessage(validation);setBusy('upload');setMessage('');const{data:{user}}=await supabase.auth.getUser();const safe=file.name.replace(/[^a-zA-Z0-9._-]/g,'_');const path=clientId+'/'+projectId+'/client/'+Date.now()+'-'+safe;const{error:uploadError}=await supabase.storage.from('project-deliverables').upload(path,file,{contentType:file.type||undefined,upsert:false});if(uploadError){setBusy('');setMessage(uploadError.message);return}const{error}=await supabase.from('project_deliverables').insert({client_id:clientId,project_id:projectId,name:name.trim()||file.name,description:description.trim()||null,storage_bucket:'project-deliverables',storage_path:path,file_name:file.name,mime_type:file.type||null,byte_size:file.size,version:1,client_visible:true,created_by:user?.id||null,source:'client',category});setBusy('');if(error){await supabase.storage.from('project-deliverables').remove([path]);setMessage(error.message);return}setName('');setDescription('');setFile(null);setMessage('File shared with SRCcvde.');load()}
- const visibleItems=items.filter(item=>{const q=query.trim().toLowerCase();return(view==='all'||item.source===view)&&(!projectId||item.project_id===projectId)&&(!q||[item.name,item.file_name,item.description,item.category].some(v=>(v||'').toLowerCase().includes(q)))})
- return <><PageTitle eyebrow="Project files" title="Shared workspace" copy="Download SRCcvde deliverables or share branding, content, references and other project files with your team." />{message&&<p className="success-message">{message}</p>}<section className="panel"><div className="section-head"><div><p className="eyebrow">Project</p><h2>Choose workspace</h2><p className="section-copy">Files stay organized inside the project they belong to.</p></div></div><label>Project<select value={projectId} onChange={e=>setProjectId(e.target.value)}>{projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label></section><section className="panel"><div className="section-head"><div><p className="eyebrow">Share with SRCcvde</p><h2>Add a project file</h2><p className="section-copy">Upload logos, brand guides, copy, references, documents or anything else we need for your project.</p></div></div><form className="document-form" onSubmit={upload}><div className="form-split"><label>File name<input value={name} onChange={e=>setName(e.target.value)} placeholder="Brand logo package"/></label><label>Category<select value={category} onChange={e=>setCategory(e.target.value)}><option value="branding">Branding</option><option value="content">Content</option><option value="reference">Reference</option><option value="document">Document</option><option value="asset">Asset</option><option value="other">Other</option></select></label></div><label>Notes<textarea value={description} onChange={e=>setDescription(e.target.value)} placeholder="Anything SRCcvde should know about this file?"/></label><label>Choose file<input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.svg,.heic,.heif,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt,.md,.mp4,.mov" onChange={e=>setFile(e.target.files?.[0]||null)} required/></label><button className="primary" disabled={busy==='upload'||!file||!projectId}>{busy==='upload'?'Uploading…':'Share file'}</button></form></section><section className="panel client-vault"><div className="section-head"><div><p className="eyebrow">Project library</p><h2>Shared files</h2></div><span className="status">{visibleItems.length}</span></div><div className="directory-tools"><label>Search files<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Name, category, notes…"/></label><label>Show<select value={view} onChange={e=>setView(e.target.value)}><option value="all">All shared files</option><option value="srccvde">Delivered by SRCcvde</option><option value="client">Shared by me</option></select></label></div>{visibleItems.length?visibleItems.map(item=><div className="doc-row vault-row" key={item.id}><div><b>{item.name}</b><small>{label(item.category||'deliverable')} · {item.source==='client'?'Shared by you':'Delivered by SRCcvde'} · Version {item.version} · {date(item.created_at)}</small>{item.description&&<p>{item.description}</p>}</div><div className="vault-actions"><button className="ghost" disabled={busy===item.id} onClick={()=>download(item)}>{busy===item.id?'Opening…':'Download'}</button></div></div>):<Empty>No project files match this view.</Empty>}</section></>
-}
-
-function ClientDocumentsPage({navigate}:{navigate:(p:string)=>void}){
- const[items,setItems]=useState<any[]>([]),[busy,setBusy]=useState(''),[message,setMessage]=useState(''),[query,setQuery]=useState(''),[view,setView]=useState('all'),[loading,setLoading]=useState(true),[loadError,setLoadError]=useState(false)
- const load=async()=>{setLoading(true);setLoadError(false);try{const{data,error}=await supabase.rpc('get_client_document_library');if(error)throw new Error();setItems((data||[]) as any[])}catch{setLoadError(true)}finally{setLoading(false)}};useEffect(()=>{void load()},[])
- async function openPdf(documentId:string,variant:'original'|'executed'){setBusy(documentId+variant);setMessage('');const{data,error}=await supabase.functions.invoke('client-document-download',{body:{document_id:documentId,variant}});setBusy('');if(error||!data?.url){setMessage(data?.error||error?.message||'Could not open this PDF.');return}window.open(data.url,'_blank','noopener,noreferrer')}
- const filteredItems=items.filter(({document:d,request:r,artifact:a})=>{const q=query.trim().toLowerCase();const matchesQuery=!q||[d.name,d.category,d.state,r?.status].some(v=>(v||'').toLowerCase().includes(q));const matchesView=view==='all'||(view==='action'&&r?.status==='pending')||(view==='completed'&&(r?.status==='signed'||d.state==='final'))||(view==='pdf'&&!!a);return matchesQuery&&matchesView})
- return <><PageTitle eyebrow="Documents" title="Your document vault" copy="Review active requests and access every document SRCcvde has shared with you."/>
- {message&&<p className="success-message">{message}</p>}
- <section className="panel client-vault"><div className="directory-tools"><label>Search documents<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Name, category, or status…"/></label><label>View<select value={view} onChange={e=>setView(e.target.value)}><option value="all">All documents</option><option value="action">Needs my action</option><option value="completed">Completed</option><option value="pdf">PDF available</option></select></label><span className="directory-count">{loading?'Loading…':`${filteredItems.length} of ${items.length}`}</span></div><LoadState loading={loading} error={loadError?'Could not load your documents. Try again.':null} onRetry={load} loadingText="Loading your documents…"/>{!loading&&!loadError&&items.length?filteredItems.map(({document:d,request:r,artifact:a})=><div className="doc-row vault-row" key={d.id}><div><b>{d.name}</b><small>{label(d.category)} · {r?label(r.status):label(d.state)}</small></div><div className="vault-actions">{r?.status==='pending'&&<button className="ghost" onClick={()=>navigate('/documents/'+r.id)}>Review</button>}{r&&<button className="ghost" onClick={()=>navigate('/documents/'+r.id)}>View</button>}{a?.original_storage_path&&<button className="ghost" disabled={busy===d.id+'original'} onClick={()=>openPdf(d.id,'original')}>{busy===d.id+'original'?'Opening…':'Original PDF'}</button>}{a?.storage_path&&<button className="ghost" disabled={busy===d.id+'executed'} onClick={()=>openPdf(d.id,'executed')}>{busy===d.id+'executed'?'Opening…':'Executed PDF'}</button>}</div></div>):null}{!loading&&!loadError&&!items.length&&<Empty>No documents have been shared with you yet.</Empty>}{!loading&&!loadError&&items.length>0&&!filteredItems.length&&<Empty>No documents match this view.</Empty>}</section></>
-}
-
-
-function AdminBillingPage(){
- const[invoices,setInvoices]=useState<BillingInvoice[]>([]),[clients,setClients]=useState<Client[]>([]),[projects,setProjects]=useState<Project[]>([]),[clientId,setClientId]=useState(''),[projectId,setProjectId]=useState(''),[items,setItems]=useState([{description:'',quantity:'1',amount:''}]),[due,setDue]=useState(''),[notes,setNotes]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[paymentInvoice,setPaymentInvoice]=useState<BillingInvoice|null>(null),[payAmount,setPayAmount]=useState(''),[payMethod,setPayMethod]=useState('Zelle for Business'),[payDate,setPayDate]=useState(new Date().toISOString().slice(0,10)),[payReference,setPayReference]=useState(''),[payNote,setPayNote]=useState(''),[loading,setLoading]=useState(true),[loadError,setLoadError]=useState(false)
- const load=async()=>{setLoading(true);setLoadError(false);try{const[i,c,p]=await Promise.all([supabase.from('billing_invoices').select('*,clients(name),projects(name)').order('created_at',{ascending:false}),supabase.from('clients').select('*').order('name'),supabase.from('projects').select('*').order('created_at',{ascending:false})]);if(i.error||c.error||p.error)throw new Error();setInvoices((i.data||[]) as unknown as BillingInvoice[]);setClients((c.data||[]) as Client[]);setProjects((p.data||[]) as Project[])}catch{setLoadError(true)}finally{setLoading(false)}}
- useEffect(()=>{load()},[])
- const draftTotal=items.reduce((n,x)=>n+(Number(x.quantity)||0)*(Number(x.amount)||0),0)
- const setItem=(index:number,key:'description'|'quantity'|'amount',value:string)=>setItems(v=>v.map((x,i)=>i===index?{...x,[key]:value}:x))
- async function createInvoice(e:FormEvent){e.preventDefault();const payload=items.map(x=>({description:x.description.trim(),quantity:Number(x.quantity),unit_amount_cents:Math.round(Number(x.amount)*100)}));if(!clientId||payload.some(x=>!x.description||!Number.isFinite(x.quantity)||x.quantity<=0||!Number.isFinite(x.unit_amount_cents)||x.unit_amount_cents<0)||draftTotal<=0)return setMessage('Choose a client and complete each line item.');setBusy(true);setMessage('');const{error}=await supabase.rpc('create_billing_invoice_v2',{p_client_id:clientId,p_project_id:projectId||null,p_items:payload,p_due_at:due?new Date(due+'T23:59:59').toISOString():null,p_notes:notes.trim()||null});setBusy(false);if(error)setMessage(error.message);else{setItems([{description:'',quantity:'1',amount:''}]);setDue('');setNotes('');setMessage('Draft invoice created and ready to review.');load()}}
- async function sendInvoice(inv:BillingInvoice){setBusy(true);setMessage('');const{data,error}=await supabase.functions.invoke('send-invoice-email',{body:{invoice_id:inv.id}});if(!error){const{data:members}=await supabase.from('client_memberships').select('user_id').eq('client_id',inv.client_id);await Promise.all((members||[]).map(m=>supabase.functions.invoke('send-push-notification',{body:{user_id:m.user_id,category:'billing',title:'New invoice from SRCcvde',body:inv.invoice_number+' · '+money(inv.total_cents,inv.currency),url:'/billing',tag:'invoice-'+inv.id}})))}setBusy(false);setMessage(error?(error.message||'Invoice could not be sent.'):(data?.sent?'Invoice emailed, archived and shared with the client.':'Invoice could not be sent.'));if(!error)load()}
- async function openInvoicePdf(inv:BillingInvoice){setBusy(true);setMessage('');const{data,error}=await supabase.functions.invoke('invoice-pdf-download',{body:{invoice_id:inv.id}});setBusy(false);if(error||!data?.url){setMessage(error?.message||'Invoice PDF is not available yet. Send the invoice first to finalize it.');return}window.open(data.url,'_blank','noopener,noreferrer')}
- function beginPayment(inv:BillingInvoice){const remaining=Math.max(0,inv.total_cents-(inv.amount_paid_cents||0));setPaymentInvoice(inv);setPayAmount((remaining/100).toFixed(2));setPayMethod('Zelle for Business');setPayDate(new Date().toISOString().slice(0,10));setPayReference('');setPayNote('')}
- async function recordPayment(e:FormEvent){e.preventDefault();if(!paymentInvoice)return;const cents=Math.round(Number(payAmount)*100),remaining=paymentInvoice.total_cents-(paymentInvoice.amount_paid_cents||0);if(!Number.isFinite(cents)||cents<=0||cents>remaining)return setMessage('Enter a payment no greater than the remaining balance.');setBusy(true);setMessage('');const{data,error}=await supabase.functions.invoke('record-invoice-payment',{body:{invoice_id:paymentInvoice.id,amount_cents:cents,method_label:payMethod,paid_at:new Date(payDate+'T12:00:00').toISOString(),reference:payReference.trim()||null,note:payNote.trim()||null}});setBusy(false);if(error){setMessage(error.message||'Payment could not be recorded.');return}setPaymentInvoice(null);setMessage(data?.paid_in_full?'Payment recorded. Invoice is paid in full and the client receipt was issued.':'Partial payment recorded and the client balance was updated.');load()}
- async function voidInvoice(inv:BillingInvoice){if(!confirm('Void '+inv.invoice_number+'?'))return;setBusy(true);const{error}=await supabase.from('billing_invoices').update({status:'void',client_visible:false}).eq('id',inv.id);setBusy(false);setMessage(error?error.message:'Invoice voided.');if(!error)load()}
- const clientProjects=projects.filter(p=>p.client_id===clientId),selectedClient=clients.find(x=>x.id===clientId),selectedProject=projects.find(x=>x.id===projectId)
- return <div className="billing-page admin-billing-page"><header className="topbar"><div><p className="eyebrow">Billing & payments</p><h1>Invoices</h1></div><span className="live-dot">Financial workspace</span></header>{message&&<p className="success-message">{message}</p>}
- <section className="panel"><div className="section-head"><div><p className="eyebrow">Invoice builder</p><h2>Create & preview</h2><p className="section-copy">Build a professional invoice with multiple line items. Sending finalizes the archived PDF.</p></div><strong>{money(Math.round(draftTotal*100))}</strong></div><form className="document-form" onSubmit={createInvoice}><div className="form-split"><label>Client<select value={clientId} onChange={e=>{setClientId(e.target.value);setProjectId('')}} required><option value="">Select client</option>{clients.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label><label>Project<select value={projectId} onChange={e=>setProjectId(e.target.value)}><option value="">No specific project</option>{clientProjects.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label></div>
- <div className="invoice-builder-items">{items.map((item,index)=><div className="invoice-builder-row" key={index}><label>Description<input value={item.description} onChange={e=>setItem(index,'description',e.target.value)} placeholder="Website development milestone" required/></label><label>Qty<input type="number" min="0.01" step="0.01" value={item.quantity} onChange={e=>setItem(index,'quantity',e.target.value)} required/></label><label>Unit price<input type="number" min="0" step="0.01" value={item.amount} onChange={e=>setItem(index,'amount',e.target.value)} placeholder="1500.00" required/></label>{items.length>1&&<button type="button" className="ghost" onClick={()=>setItems(v=>v.filter((_,i)=>i!==index))}>Remove</button>}</div>)}</div><button type="button" className="ghost" onClick={()=>setItems(v=>[...v,{description:'',quantity:'1',amount:''}])}>+ Add line item</button>
- <div className="form-split"><label>Due date<input type="date" value={due} onChange={e=>setDue(e.target.value)}/></label><label>Client notes<textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Payment terms or invoice notes"/></label></div>
- <div className="invoice-preview"><div><p className="eyebrow">Live preview</p><h2>{selectedClient?.name||'Client invoice'}</h2><small>{selectedProject?.name||'SRCcvde project'} · {due?'Due '+date(new Date(due+'T12:00:00').toISOString()):'Due upon receipt'}</small></div><div className="invoice-preview-lines">{items.filter(x=>x.description||x.amount).map((x,i)=><div key={i}><span>{x.description||'Line item'} × {x.quantity||'0'}</span><b>{money(Math.round((Number(x.quantity)||0)*(Number(x.amount)||0)*100))}</b></div>)}</div><div className="invoice-preview-total"><span>Total</span><strong>{money(Math.round(draftTotal*100))}</strong></div></div>
- <button className="primary" disabled={busy}>{busy?'Working…':'Create draft invoice'}</button></form></section>
- {paymentInvoice&&<section className="panel billing-payment-panel"><div className="section-head"><div><p className="eyebrow">Record payment</p><h2>{paymentInvoice.invoice_number}</h2><p className="section-copy">{money(Math.max(0,paymentInvoice.total_cents-(paymentInvoice.amount_paid_cents||0)))} currently owed.</p></div><button className="ghost" onClick={()=>setPaymentInvoice(null)}>Cancel</button></div><form className="document-form" onSubmit={recordPayment}><div className="form-split"><label>Amount received<input type="number" min="0.01" step="0.01" max={(Math.max(0,paymentInvoice.total_cents-(paymentInvoice.amount_paid_cents||0))/100).toFixed(2)} value={payAmount} onChange={e=>setPayAmount(e.target.value)} required/></label><label>Payment date<input type="date" value={payDate} onChange={e=>setPayDate(e.target.value)} required/></label></div><div className="form-split"><label>Method<select value={payMethod} onChange={e=>setPayMethod(e.target.value)}><option>Zelle for Business</option><option>Cash</option><option>Check</option><option>Bank transfer</option><option>Other</option></select></label><label>Reference / confirmation<input value={payReference} onChange={e=>setPayReference(e.target.value)} placeholder="Optional transaction reference"/></label></div><label>Internal note<textarea value={payNote} onChange={e=>setPayNote(e.target.value)} placeholder="Optional payment note"/></label><button className="primary" disabled={busy}>{busy?'Recording…':'Record payment & issue receipt'}</button></form></section>}
- <section className="panel"><div className="section-head"><div><p className="eyebrow">Ledger</p><h2>Invoice history</h2></div><span className="status">{invoices.length}</span></div><div className="communication-history"><LoadState loading={loading} error={loadError?'Could not load invoices. Try again.':null} onRetry={load} loadingText="Loading invoices…"/>{!loading&&!loadError&&invoices.map(inv=>{const remaining=Math.max(0,inv.total_cents-(inv.amount_paid_cents||0)),displayStatus=inv.status==='void'?'void':remaining===0?'paid':inv.amount_paid_cents>0?'partial_paid':inv.status==='sent'&&inv.due_at&&new Date(inv.due_at)<new Date()?'overdue':inv.status;return <article className="communication-row" key={inv.id}><div className="communication-meta"><span className="communication-channel">{inv.invoice_number}</span><small>{inv.clients?.name||'Client'}{inv.projects?.name?' · '+inv.projects.name:''} · {date(inv.created_at)}</small></div><div><b>{money(inv.total_cents,inv.currency)}</b><p>Paid {money(inv.amount_paid_cents||0,inv.currency)} · Owed {money(remaining,inv.currency)}</p><small>{inv.due_at?'Due '+date(inv.due_at):'No due date'} · <StatusPill value={displayStatus}/></small></div><div className="detail-actions">{inv.status==='draft'&&<button className="ghost" disabled={busy} onClick={()=>sendInvoice(inv)}>Send</button>}{inv.artifact_path&&<button className="ghost" disabled={busy} onClick={()=>openInvoicePdf(inv)}>PDF</button>}{!['draft','paid','void'].includes(inv.status)&&remaining>0&&<button className="ghost" disabled={busy} onClick={()=>beginPayment(inv)}>Record payment</button>}{!['void','paid'].includes(inv.status)&&<button className="ghost" disabled={busy} onClick={()=>voidInvoice(inv)}>Void</button>}</div></article>})}{!loading&&!loadError&&!invoices.length&&<Empty>No invoices yet.</Empty>}</div></section></div>
-}
-
-const PAYPAL_SANDBOX_CLIENT_ID='ARtSWJTQJ-r9RUNall75_EWLq0pM7oIi6UKPvtTUgH681RW473sRndRlobqxpQtDt9GXXQJc2PzX1lvs'
-let paypalSdkPromise:Promise<any>|null=null
-function loadPayPalSandbox(){if((window as any).paypal)return Promise.resolve((window as any).paypal);if(paypalSdkPromise)return paypalSdkPromise;paypalSdkPromise=new Promise((resolve,reject)=>{const existing=document.querySelector('script[data-srccvde-paypal]') as HTMLScriptElement|null;if(existing){existing.addEventListener('load',()=>resolve((window as any).paypal),{once:true});existing.addEventListener('error',()=>reject(new Error('PayPal could not load')),{once:true});return}const s=document.createElement('script');s.src='https://www.sandbox.paypal.com/web-sdk/v6/core';s.async=true;s.dataset.srccvdePaypal='1';s.onload=()=>resolve((window as any).paypal);s.onerror=()=>reject(new Error('PayPal could not load'));document.head.appendChild(s)});return paypalSdkPromise}
-function PayPalInvoiceButton({invoice,onPaid}:{invoice:BillingInvoice;onPaid:()=>void}){
- const host=useRef<HTMLDivElement|null>(null),[error,setError]=useState('')
- useEffect(()=>{let alive=true,button:any=null;const setup=async()=>{try{const paypal=await loadPayPalSandbox();if(!alive||!host.current)return;const sdk=await paypal.createInstance({clientId:PAYPAL_SANDBOX_CLIENT_ID,components:['paypal-payments'],pageType:'checkout'}),eligibility=await sdk.findEligibleMethods({currencyCode:invoice.currency||'USD'});if(!alive||!eligibility.isEligible('paypal')){setError('PayPal is unavailable for this payment.');return}const session=sdk.createPayPalOneTimePaymentSession({onApprove:async(data:any)=>{const{data:result,error:e}=await supabase.functions.invoke('paypal-checkout',{body:{action:'capture',order_id:data.orderId}});if(e||!result?.completed)throw new Error(e?.message||result?.error||'PayPal capture failed');onPaid()},onCancel:()=>setError('PayPal checkout was cancelled.'),onError:(e:any)=>setError(e?.message||'PayPal checkout could not be completed.')});button=document.createElement('paypal-button');button.setAttribute('type','pay');button.addEventListener('click',async()=>{setError('');try{const orderPromise=supabase.functions.invoke('paypal-checkout',{body:{action:'create',invoice_id:invoice.id}}).then(({data,error:e})=>{if(e||!data?.orderId)throw new Error(e?.message||data?.error||'Could not start PayPal checkout');return{orderId:data.orderId}});await session.start({presentationMode:'auto'},orderPromise)}catch(e:any){setError(e?.message||'Could not start PayPal checkout.')}});host.current.replaceChildren(button)}catch(e:any){if(alive)setError(e?.message||'PayPal could not initialize.')}};setup();return()=>{alive=false;if(button)button.remove()}},[invoice.id,invoice.currency])
- return <div className="paypal-checkout"><div ref={host}/>{error&&<small>{error}</small>}<em>Sandbox</em></div>
-}
-
-function ClientBillingPage(){
- const[invoices,setInvoices]=useState<BillingInvoice[]>([]),[payments,setPayments]=useState<any[]>([]),[methods,setMethods]=useState<any[]>([]),[refreshKey,setRefreshKey]=useState(0)
- useEffect(()=>{(async()=>{const{data:members}=await supabase.from('client_memberships').select('client_id').limit(1);const cid=members?.[0]?.client_id;if(!cid)return;const[i,p,m]=await Promise.all([supabase.from('billing_invoices').select('*,projects(name)').eq('client_id',cid).eq('client_visible',true).order('created_at',{ascending:false}),supabase.from('billing_payments').select('*').eq('client_id',cid).order('created_at',{ascending:false}),supabase.from('billing_payment_methods').select('*').eq('active',true).order('sort_order')]);setInvoices((i.data||[]) as unknown as BillingInvoice[]);setPayments(p.data||[]);setMethods(m.data||[])})()},[refreshKey])
- async function openClientInvoicePdf(inv:BillingInvoice){const{data,error}=await supabase.functions.invoke('invoice-pdf-download',{body:{invoice_id:inv.id}});if(error||!data?.url)return;window.open(data.url,'_blank','noopener,noreferrer')}
- async function openReceipt(p:any){const{data}=await supabase.functions.invoke('payment-receipt-download',{body:{payment_id:p.id}});if(data?.url)window.open(data.url,'_blank','noopener,noreferrer')}
- const activeInvoices=invoices.filter(i=>i.status!=='void')
- const visibleInvoiceIds=new Set(invoices.map(i=>i.id))
- const visiblePayments=payments.filter(p=>visibleInvoiceIds.has(p.invoice_id))
- const successfulPayments=visiblePayments.filter(p=>p.status==='succeeded')
- const totalBilled=activeInvoices.reduce((n,i)=>n+i.total_cents,0)
- const totalPaid=activeInvoices.reduce((n,i)=>n+Math.min(i.total_cents,i.amount_paid_cents||0),0)
- const outstanding=Math.max(0,totalBilled-totalPaid)
- const paidPercent=totalBilled?Math.min(100,Math.round(totalPaid/totalBilled*100)):0
-  const projectGroups=Object.values(activeInvoices.reduce((groups,inv)=>{const key=inv.project_id||'general';const current=groups[key]||{key,name:inv.projects?.name||'General billing',billed:0,paid:0,invoices:0};current.billed+=inv.total_cents;current.paid+=Math.min(inv.total_cents,inv.amount_paid_cents||0);current.invoices+=1;groups[key]=current;return groups},{} as Record<string,{key:string;name:string;billed:number;paid:number;invoices:number}>))
- return <div className="billing-page">
-  <header className="topbar billing-topbar"><div><p className="eyebrow">Billing</p><h1>Invoices & payments</h1><p className="billing-intro">A clear view of what has been billed, what you have paid, and every receipt in one place.</p></div><span className="live-dot">Secure billing</span></header>
-
-  <section className={'billing-hero '+(outstanding===0?'settled':'balance-due')}>
-   <div className="billing-hero-copy"><p className="eyebrow">{outstanding===0?'Account settled':'Current balance'}</p><h2>{outstanding===0?"You're all paid up.":money(outstanding)+' remaining'}</h2><p>{totalBilled?money(totalPaid)+' paid of '+money(totalBilled)+' billed':'No billing activity yet.'}</p></div>
-   <div className="billing-hero-status"><span>{paidPercent}%</span><small>paid</small></div>
-   <div className="billing-progress"><div><span>Payment progress</span><strong>{paidPercent}%</strong></div><div className="progress"><i style={{width:paidPercent+'%'}}/></div></div>
-  </section>
-
-  <section className={'billing-overview-grid '+(projectGroups.length>1?'has-project-breakdown':'payment-only')}>
-   {projectGroups.length>1&&<article className="panel billing-projects"><div className="billing-section-head"><div><p className="eyebrow">Project balances</p><h2>By project</h2></div><span>{projectGroups.length} project{projectGroups.length===1?'':'s'}</span></div>
-    <div className="project-balance-list">{projectGroups.map(g=>{const remaining=Math.max(0,g.billed-g.paid),pct=g.billed?Math.min(100,Math.round(g.paid/g.billed*100)):0;return <div className="project-balance-card" key={g.key}><div className="project-balance-head"><div><b>{g.name}</b><small>{g.invoices} invoice{g.invoices===1?'':'s'} · {money(g.billed)} billed</small></div><div><strong>{money(remaining)}</strong><small>{remaining===0?'paid in full':'remaining'}</small></div></div><div className="project-balance-progress"><div className="progress"><i style={{width:pct+'%'}}/></div><small>{money(g.paid)} paid · {pct}%</small></div></div>})}{!projectGroups.length&&<Empty>No project billing yet.</Empty>}</div>
-   </article>}
-   <article className="panel billing-pay-options"><div className="billing-section-head"><div><p className="eyebrow">Ways to pay</p><h2>Payment options</h2></div></div>
-    <div className="pay-option paypal-option"><div className="pay-option-icon">P</div><div><b>PayPal</b><p>Secure online checkout is available directly on any eligible open invoice below.</p></div></div>
-    {methods.map(m=><div className="pay-option" key={m.id}><div className="pay-option-icon">↗</div><div><b>{m.label}</b><strong>{m.payment_handle}</strong>{m.instructions&&<p>{m.instructions}</p>}</div></div>)}
-    <p className="pay-option-note">Payments are matched to your SRCcvde invoice and reflected here after they are recorded.</p>
-   </article>
-
-  </section>
-
-  <section className="panel billing-history-panel"><div className="billing-section-head"><div><p className="eyebrow">Invoices</p><h2>Billing history</h2><p>Open balances, due dates, PDFs, and payment options stay attached to the invoice they belong to.</p></div><span>{invoices.length} total</span></div>
-   <div className="invoice-list">{invoices.map(inv=>{const remaining=Math.max(0,inv.total_cents-(inv.amount_paid_cents||0));const displayStatus=inv.status==='void'?'void':remaining===0?'paid':inv.amount_paid_cents>0?'partial_paid':inv.status==='sent'&&inv.due_at&&new Date(inv.due_at)<new Date()?'overdue':inv.status;return <article className="invoice-card" key={inv.id}>
-    <div className="invoice-main"><div className="invoice-title-line"><div><small>Invoice</small><b>{inv.invoice_number}</b></div><StatusPill value={displayStatus}/></div><p>{inv.projects?.name||'SRCcvde project'} <span>·</span> Issued {inv.issued_at?date(inv.issued_at):date(inv.created_at)}</p></div>
-    <div className="invoice-amount"><small>Total</small><strong>{money(inv.total_cents,inv.currency)}</strong></div>
-    <div className="invoice-balance"><span><small>Paid</small><b>{money(inv.amount_paid_cents||0,inv.currency)}</b></span><span><small>Remaining</small><b>{money(remaining,inv.currency)}</b></span><small className="invoice-due">{inv.due_at?'Due '+date(inv.due_at):'No due date'}</small></div>
-    <div className="invoice-card-actions">{inv.artifact_path&&<button className="ghost" onClick={()=>openClientInvoicePdf(inv)}>Invoice PDF</button>}{remaining>0&&['sent','overdue'].includes(inv.status)&&<PayPalInvoiceButton invoice={inv} onPaid={()=>setRefreshKey(x=>x+1)}/>}</div>
-   </article>})}{!invoices.length&&<Empty>No invoices have been shared yet.</Empty>}</div>
-  </section>
-
-  <section className="panel billing-payments-panel"><div className="billing-section-head"><div><p className="eyebrow">Payments</p><h2>Payment history</h2><p>Your confirmed payments and downloadable receipts.</p></div><span>{successfulPayments.length} received</span></div>
-   <div className="payment-list">{visiblePayments.map(p=><article className="payment-card" key={p.id}><div className="payment-mark">✓</div><div className="payment-copy"><b>{p.method_label||'Payment'}</b><small>{p.paid_at?date(p.paid_at):date(p.created_at)}{p.reference?' · Ref '+p.reference:''}</small></div><strong>{money(p.amount_cents,p.currency)}</strong><div className="payment-actions"><StatusPill value={p.status}/>{p.artifact_path&&<button className="ghost" onClick={()=>openReceipt(p)}>Receipt PDF</button>}</div></article>)}{!visiblePayments.length&&<Empty>No payments recorded yet.</Empty>}</div>
-  </section>
- </div>
-}
-function ClientRouter({route,profile,navigate}:{route:string;profile:Profile|null;navigate:(p:string)=>void}){
- const sign=route.match(/^\/documents\/([0-9a-f-]+)$/i)
- if(sign)return <SignDocumentPage requestId={sign[1]} navigate={navigate}/>
- if(route==='/project')return <ClientProjectPage/>
- if(route==='/actions')return <ClientActionsPage navigate={navigate}/>
- if(route==='/messages')return <ClientMessagesPage/>
- if(route==='/deliverables')return <ClientDeliverablesPage/>
- if(route==='/handoff')return <ClientHandoffPage/>
- if(route==='/billing')return <ClientBillingPage/>
- if(route==='/documents')return <ClientDocumentsPage navigate={navigate}/>
- if(route==='/activity')return <ClientActivityPage/>
- if(route==='/notifications')return <NotificationsPage/>
- return <ClientDashboard profile={profile} navigate={navigate}/>
-}
-
-function PendingAccess({email}:{email?:string}){return <main className="pending"><Brand/><p className="eyebrow">Workspace access</p><h1>You're signed in.</h1><p>{email} does not have an active SRCcvde workspace membership yet.</p><button className="primary" onClick={()=>supabase.auth.signOut()}>Sign out</button></main>}
-
-function AdminRouter({route,profile,navigate}:{route:string;profile:Profile|null;navigate:(p:string)=>void}){
- const lead=route.match(/^\/leads\/([0-9a-f-]+)$/i),client=route.match(/^\/clients\/([0-9a-f-]+)$/i),handoff=route.match(/^\/handoffs\/([0-9a-f-]+)$/i),sign=route.match(/^\/documents\/([0-9a-f-]+)$/i)
- if(sign)return <SignDocumentPage requestId={sign[1]} navigate={navigate} staffPreview/>
- if(lead)return <LeadDetail id={lead[1]} navigate={navigate}/>
- if(client)return <ClientDetail id={client[1]} navigate={navigate}/>
- if(handoff)return <AdminHandoffPage clientId={handoff[1]} navigate={navigate}/>
- if(route==='/leads')return <LeadsPage navigate={navigate}/>
- if(route==='/clients')return <ClientsPage navigate={navigate}/>
- if(route==='/projects')return <ProjectsPage/>
- if(route==='/handoffs')return <AdminHandoffsPage navigate={navigate}/>
- if(route==='/documents')return <DocumentsPage/>
- if(route==='/billing')return <AdminBillingPage/>
- if(route==='/activity')return <ActivityPage/>
- if(route==='/notifications')return <NotificationsPage/>
- return <AdminOverview profile={profile} navigate={navigate}/>
-}
-
-export default function App(){
- const initialHash=useMemo(()=>new URLSearchParams(location.hash.replace(/^#/,'')),[])
- const initialAuthType=initialHash.get('type')
- const initialCode=useMemo(()=>new URLSearchParams(location.search).get('code'),[])
- const[session,setSession]=useState<Session|null>(null),[loading,setLoading]=useState(true),[membership,setMembership]=useState<Membership|null>(null),[profile,setProfile]=useState<Profile|null>(null),[route,setRoute]=useState(path()),[passwordFlow,setPasswordFlow]=useState(false),[authLinkError,setAuthLinkError]=useState(''),[mobileNav,setMobileNav]=useState(false),[accessLoading,setAccessLoading]=useState(false),[accessError,setAccessError]=useState(''),[online,setOnline]=useState(()=>navigator.onLine)
- useEffect(()=>{const pop=()=>{setRoute(path());setMobileNav(false)};addEventListener('popstate',pop);return()=>removeEventListener('popstate',pop)},[])
- useEffect(()=>{
-  let alive=true
-  const boot=async()=>{
-   if(route==='/set-password'){
-    const accessToken=initialHash.get('access_token'),refreshToken=initialHash.get('refresh_token')
-    if((initialAuthType==='recovery'||initialAuthType==='invite')&&accessToken&&refreshToken){
-     const{data,error}=await supabase.auth.setSession({access_token:accessToken,refresh_token:refreshToken})
-     if(!alive)return
-     if(error){setAuthLinkError(error.message);setLoading(false);return}
-     setPasswordFlow(true);setSession(data.session);setLoading(false);return
-    }
-    if(initialCode){
-     const{data,error}=await supabase.auth.exchangeCodeForSession(initialCode)
-     if(!alive)return
-     if(error){setAuthLinkError(error.message);setLoading(false);return}
-     setPasswordFlow(true);setSession(data.session);setLoading(false);return
-    }
-   }
-   const{data}=await supabase.auth.getSession()
-   if(alive){setSession(data.session);setLoading(false)}
-  }
-  boot()
-  const{data:{subscription}}=supabase.auth.onAuthStateChange((event,s)=>{if(event==='PASSWORD_RECOVERY')setPasswordFlow(true);setSession(s);if(!s){setMobileNav(false);setMembership(null);setProfile(null)}})
-  return()=>{alive=false;subscription.unsubscribe()}
- },[])
- useEffect(()=>{const up=()=>setOnline(true),down=()=>setOnline(false);addEventListener('online',up);addEventListener('offline',down);return()=>{removeEventListener('online',up);removeEventListener('offline',down)}},[])
- useEffect(()=>{if(!session){setAccessLoading(false);setAccessError('');return};setAccessLoading(true);setAccessError('');Promise.all([supabase.from('app_memberships').select('role,status').eq('user_id',session.user.id).maybeSingle(),supabase.from('profiles').select('full_name,email').eq('id',session.user.id).maybeSingle()]).then(([m,p])=>{if(m.error){setAccessError('We could not verify your workspace access. Check your connection and try again.');setAccessLoading(false);return}setMembership(m.data as Membership|null);setProfile(p.data as Profile|null);setAccessLoading(false)}).catch(()=>{setAccessError('We could not verify your workspace access. Check your connection and try again.');setAccessLoading(false)})},[session])
- useEffect(()=>{if(!mobileNav)return;const close=(e:KeyboardEvent)=>{if(e.key==='Escape')setMobileNav(false)};const workspace=document.getElementById('main-workspace');document.body.classList.add('nav-open');workspace?.setAttribute('inert','');addEventListener('keydown',close);requestAnimationFrame(()=>document.querySelector<HTMLElement>('#workspace-navigation nav button')?.focus());return()=>{document.body.classList.remove('nav-open');workspace?.removeAttribute('inert');removeEventListener('keydown',close);requestAnimationFrame(()=>document.querySelector<HTMLElement>('.mobile-menu-button')?.focus())}},[mobileNav])
- const active=useMemo(()=>membership?.status==='active'?membership:null,[membership])
- const workspaceRef=useRef<HTMLElement|null>(null)
- useEffect(()=>{const section=route==='/'?'Overview':label(route.split('/').filter(Boolean)[0]||'Overview');document.title=section+' — SRCcvde Workspace'},[route])
- useEffect(()=>{if(!active)return;requestAnimationFrame(()=>workspaceRef.current?.focus({preventScroll:true}))},[route,active])
- const resumeChecked=useRef(false)
- const routeKey=active&&session?.user?.id?'srccvde:last-route:'+session.user.id:null
- useEffect(()=>{if(!active||!routeKey||resumeChecked.current)return;resumeChecked.current=true;if(route==='/'){try{const saved=localStorage.getItem(routeKey);if(saved&&saved.startsWith('/')&&!saved.startsWith('//')&&saved!=='/'&&saved!=='/set-password'){history.replaceState({},'',saved);setRoute(path());return}}catch{}}},[active,routeKey,route])
- useEffect(()=>{if(!active||!routeKey||!resumeChecked.current||route==='/set-password')return;try{localStorage.setItem(routeKey,route)}catch{}},[route,active,routeKey])
- useEffect(()=>{if(!active||!routeKey)return;const scrollKey=routeKey+':scroll';const save=()=>{try{sessionStorage.setItem(scrollKey,JSON.stringify({route:path(),y:window.scrollY}))}catch{}};window.addEventListener('pagehide',save);return()=>{window.removeEventListener('pagehide',save)}},[active,routeKey])
- useEffect(()=>{if(!active||!routeKey||!resumeChecked.current)return;try{const saved=JSON.parse(sessionStorage.getItem(routeKey+':scroll')||'null');if(saved?.route===route&&Number.isFinite(saved.y)&&saved.y>0){requestAnimationFrame(()=>window.scrollTo(0,saved.y));sessionStorage.removeItem(routeKey+':scroll')}}catch{}},[active,routeKey,route])
- const navigate=(p:string)=>{history.pushState({},'',p);if(routeKey){try{localStorage.setItem(routeKey,p);sessionStorage.removeItem(routeKey+':scroll')}catch{}}setRoute(path());setMobileNav(false);window.scrollTo({top:0,left:0,behavior:'auto'})}
- if(loading)return <main className="loading"><Brand/><span>Opening workspace…</span></main>
- if(route==='/set-password'&&(!passwordFlow||!session))return <main className="pending"><Brand/><p className="eyebrow">Secure password setup</p><h1>{authLinkError?'This password link could not be opened.':"This password link isn't active."}</h1><p>{authLinkError?'The link may have expired or already been used. Request a fresh password email and try again.':'For your protection, a password can only be changed from the recovery or invitation link sent to that account.'}</p><button className="primary" onClick={async()=>{await supabase.auth.signOut();history.replaceState({},'','/');location.reload()}}>Return to sign in</button></main>
- if(!session)return <Login/>
- if(route==='/set-password')return <SetPassword/>
- if(accessLoading)return <main className="loading"><Brand/><span>Preparing your workspace…</span></main>
- if(accessError)return <main className="pending"><Brand/><p className="eyebrow">Connection check</p><h1>We couldn’t open your workspace.</h1><p>{accessError}</p><button className="primary" onClick={()=>location.reload()}>Try again</button></main>
- if(!active)return <PendingAccess email={session.user.email}/>
- return <div className="app-shell"><a className="skip-link" href="#main-workspace">Skip to main content</a>{!online&&<div className="offline-banner" role="status">You’re offline. Changes may not save until your connection returns.</div>}<header className="mobile-bar"><Brand/><button className="mobile-menu-button" aria-label={mobileNav?"Close navigation":"Open navigation"} aria-expanded={mobileNav} aria-controls="workspace-navigation" onClick={()=>setMobileNav(v=>!v)}>Menu</button></header>{mobileNav&&<button className="mobile-scrim" aria-label="Close navigation" onClick={()=>setMobileNav(false)}/>}<Sidebar role={active.role} current={route} navigate={navigate} mobileOpen={mobileNav} onNavigate={()=>setMobileNav(false)} onSignOut={()=>supabase.auth.signOut()}/><main id="main-workspace" ref={workspaceRef} tabIndex={-1} className="workspace">{active.role==='client'?<ClientRouter route={route} profile={profile} navigate={navigate}/>:<AdminRouter route={route} profile={profile} navigate={navigate}/>}</main></div>
+  );
+  return active.role === "client" ? (
+    workspace
+  ) : (
+    <StaffMfa>{workspace}</StaffMfa>
+  );
 }

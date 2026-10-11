@@ -1,73 +1,20 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
-
-const ALLOWED_ORIGINS = new Set([
-  "https://srccvde.com",
-  "https://www.srccvde.com",
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-]);
-
-const PROJECT_TYPES = new Set([
-  "Website",
-  "Web app",
-  "PWA",
-  "E-commerce",
-  "Portal or dashboard",
-  "Operations / internal tool",
-  "Not sure yet",
-  "Something else",
-]);
-
-const BUDGETS = new Set([
-  "Not sure yet",
-  "Under $2,500",
-  "$2,500–$5,000",
-  "$5,000–$10,000",
-  "$10,000–$25,000",
-  "$25,000+",
-]);
-
-const TIMELINES = new Set([
-  "Flexible",
-  "Within 1 month",
-  "1–3 months",
-  "3–6 months",
-  "6+ months",
-]);
-
-const INVOLVEMENT = new Set([
-  "Hands-off",
-  "Collaborative",
-  "Very involved",
-  "Not sure yet",
-]);
-
-function cors(origin: string | null) {
-  const allowed = origin && ALLOWED_ORIGINS.has(origin) ? origin : "https://srccvde.com";
-  return {
-    "Access-Control-Allow-Origin": allowed,
-    "Access-Control-Allow-Headers": "apikey, content-type, x-client-info",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Vary": "Origin",
-  };
-}
-
-function json(body: unknown, status = 200, origin: string | null = null) {
-  return new Response(JSON.stringify(body), {
+import { createClient } from "npm:@supabase/supabase-js@2.117.3";
+import webpush from "npm:web-push@3.6.7";
+import {
+  InputError,
+  readBoundedJson,
+  validateIntake,
+} from "../_shared/intake-validation.ts";
+declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
     status,
-    headers: { ...cors(origin), "Content-Type": "application/json; charset=utf-8" },
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+    },
   });
-}
-
-function clean(value: unknown, max: number) {
-  return typeof value === "string" ? value.trim().slice(0, max) : "";
-}
-
-function validEmail(email: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254;
-}
-
 async function hmac(value: string, secret: string) {
   const key = await crypto.subtle.importKey(
     "raw",
@@ -76,128 +23,183 @@ async function hmac(value: string, secret: string) {
     false,
     ["sign"],
   );
-  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value));
-  return Array.from(new Uint8Array(signature)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  const hash = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(value),
+  );
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
-
 Deno.serve(async (req: Request) => {
-  const origin = req.headers.get("origin");
-
-  if (req.method === "OPTIONS") {
-    if (origin && !ALLOWED_ORIGINS.has(origin)) return json({ error: "Origin not allowed" }, 403, origin);
-    return new Response("ok", { headers: cors(origin) });
-  }
-
-  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405, origin);
-  if (!origin || !ALLOWED_ORIGINS.has(origin)) return json({ error: "Origin not allowed" }, 403, origin);
-
-  const publishableKeys = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS") ?? "{}");
-  const secretKeys = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}");
-  const publishableKey = publishableKeys["default"];
-  const secretKey = secretKeys["default"];
-  const suppliedKey = req.headers.get("apikey");
-
-  if (!publishableKey || !secretKey) return json({ error: "Server configuration error" }, 500, origin);
-  if (!suppliedKey || suppliedKey !== publishableKey) return json({ error: "Unauthorized" }, 401, origin);
-
-  const contentLength = Number(req.headers.get("content-length") ?? "0");
-  if (contentLength > 20_000) return json({ error: "Request too large" }, 413, origin);
-
-  let body: Record<string, unknown>;
+  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+  const gateway = Deno.env.get("INTAKE_GATEWAY_SECRET"),
+    hashSecret = Deno.env.get("INTAKE_HASH_SECRET");
+  if (!gateway || !hashSecret)
+    return json({ error: "Intake configuration unavailable" }, 503);
+  const expected = await hmac(gateway, hashSecret),
+    supplied = await hmac(
+      req.headers.get("x-intake-gateway-secret") || "",
+      hashSecret,
+    );
+  let difference = 0;
+  for (let i = 0; i < expected.length; i++)
+    difference |= expected.charCodeAt(i) ^ supplied.charCodeAt(i);
+  if (difference !== 0) return json({ error: "Unauthorized" }, 401);
+  const ip = req.headers.get("x-intake-ip");
+  if (!ip || ip.length > 64) return json({ error: "Invalid source" }, 400);
   try {
-    body = await req.json();
-  } catch {
-    return json({ error: "Invalid request" }, 400, origin);
+    const body = await readBoundedJson(req);
+    if (typeof body.website === "string" && body.website.trim())
+      return json({ ok: true });
+    const input = validateIntake(body);
+    const { name, project_type, budget_range } = input;
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      { auth: { persistSession: false, autoRefreshToken: false } },
+    );
+    const ip_hash = await hmac(ip, hashSecret),
+      request_id = crypto.randomUUID();
+    const { data: admission, error } = await supabase.rpc(
+      "submit_intake_atomic",
+      { p_input: input, p_ip_hash: ip_hash, p_request_id: request_id },
+    );
+    if (error) {
+      console.error("intake_database_failed", { code: error.code });
+      return json(
+        { error: "Unable to submit right now. Please try again." },
+        500,
+      );
+    }
+    if (admission?.rate_limited)
+      return json(
+        { error: "Too many recent submissions. Please try again later." },
+        429,
+      );
+    if (admission?.duplicate) return json({ ok: true, duplicate: true });
+    if (admission?.ok !== true)
+      return json(
+        { error: "Unable to submit right now. Please try again." },
+        500,
+      );
+    // Notify active SRCcvde owners/admins on every subscribed device.
+    // Notification failure must never make a valid customer inquiry look failed.
+    const notify = async () => {
+      try {
+        const publicKey = Deno.env.get("VAPID_PUBLIC_KEY");
+        const privateKey = Deno.env.get("VAPID_PRIVATE_KEY");
+        if (publicKey && privateKey) {
+          webpush.setVapidDetails(
+            "mailto:admin@srccvde.com",
+            publicKey,
+            privateKey,
+          );
+          const { data: staff } = await supabase
+            .from("app_memberships")
+            .select("user_id,role")
+            .in("role", ["owner", "admin"])
+            .eq("status", "active");
+
+          for (const member of staff || []) {
+            const { data: pref } = await supabase
+              .from("notification_preferences")
+              .select("project_updates")
+              .eq("user_id", member.user_id)
+              .maybeSingle();
+            if (pref?.project_updates === false) continue;
+
+            const title = "New website inquiry";
+            const summary = [name, project_type, budget_range]
+              .filter(Boolean)
+              .join(" · ");
+            const notificationBody = summary.slice(0, 240);
+            const tag = "website-inquiry-" + request_id;
+            const url = "/leads";
+
+            const { data: outbox } = await supabase
+              .from("notification_outbox")
+              .insert({
+                recipient_user_id: member.user_id,
+                category: "project_updates",
+                title,
+                body: notificationBody,
+                url,
+                tag,
+                status: "processing",
+                attempts: 1,
+              })
+              .select("id")
+              .single();
+
+            const { data: subs } = await supabase
+              .from("push_subscriptions")
+              .select("id,endpoint,p256dh,auth_key")
+              .eq("user_id", member.user_id)
+              .eq("enabled", true);
+
+            let delivered = 0;
+            for (const sub of subs || []) {
+              try {
+                await webpush.sendNotification(
+                  {
+                    endpoint: sub.endpoint,
+                    keys: { p256dh: sub.p256dh, auth: sub.auth_key },
+                  },
+                  JSON.stringify({ title, body: notificationBody, url, tag }),
+                );
+                delivered++;
+              } catch (pushError) {
+                const statusCode = Number(
+                  (pushError as { statusCode?: number })?.statusCode || 0,
+                );
+                if (statusCode === 404 || statusCode === 410) {
+                  await supabase
+                    .from("push_subscriptions")
+                    .update({
+                      enabled: false,
+                      revoked_at: new Date().toISOString(),
+                    })
+                    .eq("id", sub.id);
+                } else {
+                  console.error("inquiry_push_delivery_failed", pushError);
+                }
+              }
+            }
+
+            if (outbox?.id) {
+              await supabase
+                .from("notification_outbox")
+                .update({
+                  status: delivered ? "sent" : "skipped",
+                  last_error: delivered ? null : "no_deliverable_subscription",
+                  processed_at: new Date().toISOString(),
+                })
+                .eq("id", outbox.id);
+            }
+          }
+        } else {
+          console.error("inquiry_push_not_configured");
+        }
+      } catch (notifyError) {
+        console.error("inquiry_notification_failed", notifyError);
+      }
+    };
+    EdgeRuntime.waitUntil(notify());
+    return json({ ok: true, request_id }, 201);
+  } catch (error) {
+    if (error instanceof InputError)
+      return json(
+        { error: error.message },
+        error.message === "Request too large" ? 413 : 400,
+      );
+    console.error("intake_failed", {
+      name: error instanceof Error ? error.name : "unknown",
+    });
+    return json(
+      { error: "Unable to submit right now. Please try again." },
+      500,
+    );
   }
-
-  // Honeypot: real users never see or fill this.
-  if (clean(body.website, 200)) return json({ ok: true }, 200, origin);
-
-  const name = clean(body.name, 120);
-  const email = clean(body.email, 254).toLowerCase();
-  const company = clean(body.company, 160);
-  const project_type = clean(body.project_type, 80);
-  const budget_range = clean(body.budget_range, 80) || "Not sure yet";
-  const timeline = clean(body.timeline, 80) || "Flexible";
-  const involvement = clean(body.involvement, 80) || "Collaborative";
-  const details = clean(body.details, 5000);
-
-  if (name.length < 2) return json({ error: "Please enter your name." }, 400, origin);
-  if (!validEmail(email)) return json({ error: "Please enter a valid email." }, 400, origin);
-  if (!PROJECT_TYPES.has(project_type)) return json({ error: "Please choose a project type." }, 400, origin);
-  if (!BUDGETS.has(budget_range)) return json({ error: "Invalid budget range." }, 400, origin);
-  if (!TIMELINES.has(timeline)) return json({ error: "Invalid timeline." }, 400, origin);
-  if (!INVOLVEMENT.has(involvement)) return json({ error: "Invalid involvement preference." }, 400, origin);
-  if (details.length < 20) return json({ error: "Please tell us a little more about the idea." }, 400, origin);
-
-  const ip =
-    req.headers.get("cf-connecting-ip") ??
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    "unknown";
-  const ip_hash = await hmac(ip, secretKey);
-  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, secretKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-  const { count: recentCount, error: countError } = await supabase
-    .from("project_inquiries")
-    .select("id", { count: "exact", head: true })
-    .eq("ip_hash", ip_hash)
-    .gte("created_at", oneHourAgo);
-
-  if (countError) {
-    console.error("rate_limit_check_failed", countError);
-    return json({ error: "Unable to submit right now. Please try again." }, 500, origin);
-  }
-
-  if ((recentCount ?? 0) >= 5) {
-    return json({ error: "Too many recent submissions. Please try again later." }, 429, origin);
-  }
-
-  const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-  const { data: duplicate, error: duplicateError } = await supabase
-    .from("project_inquiries")
-    .select("id")
-    .eq("email", email)
-    .eq("project_type", project_type)
-    .eq("details", details)
-    .gte("created_at", tenMinutesAgo)
-    .limit(1)
-    .maybeSingle();
-
-  if (duplicateError) {
-    console.error("duplicate_check_failed", duplicateError);
-    return json({ error: "Unable to submit right now. Please try again." }, 500, origin);
-  }
-
-  if (duplicate) return json({ ok: true, duplicate: true }, 200, origin);
-
-  const request_id = crypto.randomUUID();
-  const user_agent = clean(req.headers.get("user-agent"), 500);
-
-  const { error: insertError } = await supabase.from("project_inquiries").insert({
-    name,
-    email,
-    company: company || null,
-    project_type,
-    budget_range,
-    timeline,
-    involvement,
-    details,
-    status: "new",
-    source: "website",
-    request_id,
-    ip_hash,
-    origin,
-    user_agent,
-    metadata: { page: "/start" },
-  });
-
-  if (insertError) {
-    console.error("inquiry_insert_failed", insertError);
-    return json({ error: "Unable to submit right now. Please try again." }, 500, origin);
-  }
-
-  return json({ ok: true, request_id }, 201, origin);
 });
