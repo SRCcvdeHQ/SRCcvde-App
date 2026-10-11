@@ -3,3 +3,9 @@ dist
 .env
 .env.local
 .DS_Store
+
+.wrangler/
+supabase/node_modules/
+.env.local
+
+supabase/.temp/
