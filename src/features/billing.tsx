@@ -724,53 +724,99 @@ export function ClientBillingPage() {
   const [invoices, setInvoices] = useState<BillingInvoice[]>([]),
     [payments, setPayments] = useState<any[]>([]),
     [methods, setMethods] = useState<any[]>([]),
-    [refreshKey, setRefreshKey] = useState(0);
+    [refreshKey, setRefreshKey] = useState(0),
+    [loading, setLoading] = useState(true),
+    [loadError, setLoadError] = useState(false),
+    [downloadError, setDownloadError] = useState("");
   useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setLoadError(false);
     (async () => {
-      const { data: members } = await supabase
-        .from("client_memberships")
-        .select("client_id")
-        .limit(1);
-      const cid = members?.[0]?.client_id;
-      if (!cid) return;
-      const [i, p, m] = await Promise.all([
-        supabase
-          .from("billing_invoices")
-          .select("*,projects(name)")
-          .eq("client_id", cid)
-          .eq("client_visible", true)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("billing_payments")
-          .select("*")
-          .eq("client_id", cid)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("billing_payment_methods")
-          .select("*")
-          .eq("active", true)
-          .order("sort_order"),
-      ]);
-      setInvoices((i.data || []) as unknown as BillingInvoice[]);
-      setPayments(p.data || []);
-      setMethods(m.data || []);
+      try {
+        const { data: members, error: membershipError } = await supabase
+          .from("client_memberships")
+          .select("client_id")
+          .limit(1);
+        const cid = members?.[0]?.client_id;
+        if (membershipError || !cid)
+          throw new Error("Billing workspace unavailable");
+        const [i, p, m] = await Promise.all([
+          supabase
+            .from("billing_invoices")
+            .select("*,projects(name)")
+            .eq("client_id", cid)
+            .eq("client_visible", true)
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("billing_payments")
+            .select("*")
+            .eq("client_id", cid)
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("billing_payment_methods")
+            .select("*")
+            .eq("active", true)
+            .order("sort_order"),
+        ]);
+        if (i.error || p.error || m.error)
+          throw new Error("Billing unavailable");
+        if (!alive) return;
+        setInvoices((i.data || []) as unknown as BillingInvoice[]);
+        setPayments(p.data || []);
+        setMethods(m.data || []);
+      } catch {
+        if (alive) setLoadError(true);
+      } finally {
+        if (alive) setLoading(false);
+      }
     })();
+    return () => {
+      alive = false;
+    };
   }, [refreshKey]);
   async function openClientInvoicePdf(inv: BillingInvoice) {
+    setDownloadError("");
     const { data, error } = await supabase.functions.invoke(
       "invoice-pdf-download",
       { body: { invoice_id: inv.id } },
     );
-    if (error || !data?.url) return;
+    if (error || !data?.url) {
+      setDownloadError(
+        "Your invoice PDF could not be opened. Please try again.",
+      );
+      return;
+    }
     window.open(data.url, "_blank", "noopener,noreferrer");
   }
   async function openReceipt(p: any) {
-    const { data } = await supabase.functions.invoke(
+    setDownloadError("");
+    const { data, error } = await supabase.functions.invoke(
       "payment-receipt-download",
       { body: { payment_id: p.id } },
     );
-    if (data?.url) window.open(data.url, "_blank", "noopener,noreferrer");
+    if (error || !data?.url) {
+      setDownloadError("Your receipt could not be opened. Please try again.");
+      return;
+    }
+    window.open(data.url, "_blank", "noopener,noreferrer");
   }
+  if (loading || loadError)
+    return (
+      <section className="panel">
+        <h1>Invoices & payments</h1>
+        <LoadState
+          loading={loading}
+          error={
+            loadError
+              ? "Could not load your billing information. Please try again."
+              : null
+          }
+          onRetry={() => setRefreshKey((key) => key + 1)}
+          loadingText="Loading your billing information…"
+        />
+      </section>
+    );
   const activeInvoices = invoices.filter((i) => i.status !== "void");
   const visibleInvoiceIds = new Set(invoices.map((i) => i.id));
   const visiblePayments = payments.filter((p) =>
@@ -819,6 +865,7 @@ export function ClientBillingPage() {
   );
   return (
     <div className="billing-page">
+      {downloadError && <p role="alert">{downloadError}</p>}
       <header className="topbar billing-topbar">
         <div>
           <p className="eyebrow">Billing</p>
