@@ -9,3 +9,5 @@ supabase/node_modules/
 .env.local
 
 supabase/.temp/
+test-results/
+playwright-report/

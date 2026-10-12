@@ -53,54 +53,79 @@ export function SignDocumentPage({
     [legalName, setLegalName] = useState(""),
     [consent, setConsent] = useState(false),
     [busy, setBusy] = useState(false),
+    [loading, setLoading] = useState(true),
     [message, setMessage] = useState("");
   useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setMessage("");
+    setRequest(null);
+    setVersion(null);
+    setDoc(null);
     (async () => {
-      if (staffPreview) {
-        const { data, error } = await supabase.rpc(
-          "get_staff_signature_preview",
-          { p_request_id: requestId },
-        );
-        if (error) {
-          setMessage(error.message);
+      try {
+        if (staffPreview) {
+          const { data, error } = await supabase.rpc(
+            "get_staff_signature_preview",
+            { p_request_id: requestId },
+          );
+          if (error || !data) throw new Error("Document unavailable");
+          if (!alive) return;
+          const preview = data as {
+            request: SignatureRequest;
+            version: DocumentVersion;
+            document: DocumentRow;
+          };
+          setRequest(preview.request);
+          setVersion(preview.version);
+          setDoc(preview.document);
           return;
         }
-        const preview = data as {
-          request: SignatureRequest;
-          version: DocumentVersion;
-          document: DocumentRow;
-        };
-        setRequest(preview.request);
-        setVersion(preview.version);
-        setDoc(preview.document);
-        return;
+        const { data: r, error: requestError } = await supabase
+          .from("signature_requests")
+          .select("*")
+          .eq("id", requestId)
+          .single();
+        if (requestError || !r) throw new Error("Document unavailable");
+        if (!alive) return;
+        setRequest(r as SignatureRequest);
+        const [v, d] = await Promise.all([
+          supabase
+            .from("document_versions")
+            .select("*")
+            .eq("id", r.document_version_id)
+            .single(),
+          supabase
+            .from("client_documents")
+            .select("*")
+            .eq("id", r.document_id)
+            .single(),
+        ]);
+        if (v.error || d.error || !v.data || !d.data)
+          throw new Error("Document unavailable");
+        if (!alive) return;
+        setVersion(v.data as DocumentVersion);
+        setDoc(d.data as DocumentRow);
+        const { error: viewError } = await supabase.rpc(
+          "mark_signature_viewed",
+          {
+            p_request_id: requestId,
+          },
+        );
+        if (viewError)
+          console.error("Could not record document view", viewError);
+      } catch {
+        if (alive)
+          setMessage(
+            "This document could not be opened. It may be unavailable or you may not have access.",
+          );
+      } finally {
+        if (alive) setLoading(false);
       }
-      const { data: r } = await supabase
-        .from("signature_requests")
-        .select("*")
-        .eq("id", requestId)
-        .single();
-      if (!r) return;
-      setRequest(r as SignatureRequest);
-      const [v, d] = await Promise.all([
-        supabase
-          .from("document_versions")
-          .select("*")
-          .eq("id", r.document_version_id)
-          .single(),
-        supabase
-          .from("client_documents")
-          .select("*")
-          .eq("id", r.document_id)
-          .single(),
-      ]);
-      setVersion(v.data as DocumentVersion);
-      setDoc(d.data as DocumentRow);
-      const { error: viewError } = await supabase.rpc("mark_signature_viewed", {
-        p_request_id: requestId,
-      });
-      if (viewError) console.error("Could not record document view", viewError);
     })();
+    return () => {
+      alive = false;
+    };
   }, [requestId, staffPreview]);
   async function sign() {
     if (!request) return;
@@ -148,8 +173,25 @@ export function SignDocumentPage({
       await supabase.functions.invoke("dispatch-notifications");
     })();
   }
+  if (loading)
+    return (
+      <p className="muted" role="status">
+        Opening secure document…
+      </p>
+    );
   if (!request || !version || !doc)
-    return <p className="muted">Opening secure document…</p>;
+    return (
+      <section className="panel">
+        <h1>Document unavailable</h1>
+        <p role="alert">{message}</p>
+        <button className="primary" onClick={() => location.reload()}>
+          Try again
+        </button>
+        <button className="ghost" onClick={() => navigate("/documents")}>
+          Back to documents
+        </button>
+      </section>
+    );
   const complete = request.status === "signed";
   return (
     <section className="review-v2">

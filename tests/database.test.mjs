@@ -16,6 +16,7 @@ test("restored schema enforces suspension, tenant isolation, MFA, and atomic int
     `);
     await db.exec(`
       create function auth.jwt() returns jsonb language sql stable as $$select coalesce(nullif(current_setting('request.jwt.claims',true),'')::jsonb,'{}'::jsonb)$$;
+      create function auth.role() returns text language sql stable as $$select auth.jwt()->>'role'$$;
       create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text);
       alter table storage.objects enable row level security;
       create function storage.foldername(text) returns text[] language sql immutable as $$select string_to_array($1,'/')$$;
@@ -101,6 +102,166 @@ test("restored schema enforces suspension, tenant isolation, MFA, and atomic int
       /permission denied/,
     );
     await db.exec("reset role");
+    // Exercise the real approval, document and billing routines with isolated fixtures.
+    await db.query(
+      `update public.app_memberships set status='active' where user_id=$1`,
+      [a],
+    );
+    const { rows: actions } = await db.query(
+      `insert into public.client_action_requests(client_id,title) values($1,'Review the synthetic brief') returning id`,
+      [clients[0].id],
+    );
+    const completeAction = () =>
+      db.query(`select (public.complete_client_action_request($1)).*`, [
+        actions[0].id,
+      ]);
+    await assert.rejects(asUser(b, "aal1", completeAction), /access denied/);
+    const completion = (await asUser(a, "aal1", completeAction)).rows[0];
+    assert.equal(completion.status, "completed");
+    assert.equal(
+      (await asUser(a, "aal1", completeAction)).rows[0].completed_at.getTime(),
+      completion.completed_at.getTime(),
+    );
+
+    const { rows: versions } = await db.query(
+      `insert into public.document_versions(document_id,version_number,content_snapshot) values($1,1,'Synthetic nonbinding acknowledgment for automated tests.') returning id,content_sha256`,
+      [docs[0].id],
+    );
+    const { rows: requests } = await db.query(
+      `insert into public.signature_requests(document_id,document_version_id,client_id,signer_user_id,signer_name,signer_email,signer_side,signature_kind,consent_text) values($1,$2,$3,$4,'Person A','a@example.test','client','acknowledgment','Synthetic consent text') returning id`,
+      [docs[0].id, versions[0].id, clients[0].id, a],
+    );
+    const acknowledge = (consent = true) =>
+      db.query(`select public.sign_document($1,'Person A','Person A',$2)`, [
+        requests[0].id,
+        consent,
+      ]);
+    await assert.rejects(
+      asUser(a, "aal1", () => acknowledge(false)),
+      /consent/,
+    );
+    await assert.rejects(
+      asUser(b, "aal1", () => acknowledge()),
+      /not authorized/,
+    );
+    await asUser(a, "aal1", () => acknowledge());
+    await assert.rejects(
+      asUser(a, "aal1", () => acknowledge()),
+      /not pending/,
+    );
+    assert.equal(
+      (
+        await db.query(
+          `select signed_content_sha256 from public.signature_requests where id=$1`,
+          [requests[0].id],
+        )
+      ).rows[0].signed_content_sha256,
+      versions[0].content_sha256,
+    );
+    assert.equal(
+      (
+        await db.query(
+          `select state from public.client_documents where id=$1`,
+          [docs[0].id],
+        )
+      ).rows[0].state,
+      "final",
+    );
+
+    const createInvoice = () =>
+      db.query(`select public.create_billing_invoice_v2($1,null,$2) as id`, [
+        clients[0].id,
+        [
+          {
+            description: "Synthetic design",
+            quantity: 2,
+            unit_amount_cents: 1250,
+          },
+          {
+            description: "Synthetic review",
+            quantity: 1,
+            unit_amount_cents: 500,
+          },
+        ],
+      ]);
+    await assert.rejects(
+      asUser(a, "aal1", createInvoice),
+      /Forbidden|assurance/,
+    );
+    await assert.rejects(
+      asUser(staff, "aal1", createInvoice),
+      /Forbidden|assurance/,
+    );
+    const invoiceId = (await asUser(staff, "aal2", createInvoice)).rows[0].id;
+    assert.equal(
+      Number(
+        (
+          await db.query(
+            `select total_cents from public.billing_invoices where id=$1`,
+            [invoiceId],
+          )
+        ).rows[0].total_cents,
+      ),
+      3000,
+    );
+    await db.query(
+      `update public.billing_invoices set status='sent',client_visible=true where id=$1`,
+      [invoiceId],
+    );
+    assert.equal(
+      (
+        await asUser(b, "aal1", () =>
+          db.query(`select id from public.billing_invoices where id=$1`, [
+            invoiceId,
+          ]),
+        )
+      ).rows.length,
+      0,
+    );
+    const capture = (amount = 3000) =>
+      db.query(
+        `select public.record_paypal_payment('SYNTHETIC-ORDER','SYNTHETIC-CAPTURE',$1) as id`,
+        [amount],
+      );
+    await assert.rejects(
+      asUser(a, "aal1", () => capture()),
+      /permission denied/,
+    );
+    await db.query(
+      `insert into public.billing_paypal_orders(invoice_id,client_id,paypal_order_id,amount_cents,currency,status) values($1,$2,'SYNTHETIC-ORDER',3000,'USD','created')`,
+      [invoiceId, clients[0].id],
+    );
+    await db.query(
+      `select set_config('request.jwt.claims','{"role":"service_role"}',false)`,
+    );
+    await db.exec("set role service_role");
+    try {
+      await assert.rejects(capture(2999), /amount mismatch/);
+      const paymentId = (await capture()).rows[0].id;
+      assert.equal((await capture()).rows[0].id, paymentId);
+    } finally {
+      await db.exec("reset role");
+    }
+    assert.equal(
+      (
+        await db.query(
+          `select status from public.billing_invoices where id=$1`,
+          [invoiceId],
+        )
+      ).rows[0].status,
+      "paid",
+    );
+    assert.equal(
+      Number(
+        (
+          await db.query(
+            `select count(*) as n from public.billing_payments where invoice_id=$1`,
+            [invoiceId],
+          )
+        ).rows[0].n,
+      ),
+      1,
+    );
     const input = {
       name: "Test User",
       email: "test@example.test",
